@@ -1,0 +1,26 @@
+[
+  {
+    "brand": "Uplift",
+    "url": "https://www.upliftdesk.com/uplift-v2-standing-desk-v2-or-v2-commercial/",
+    "title": "UPLIFT V3 Standing Desk",
+    "price": 300.0,
+    "currency": "USD",
+    "description": "The desktop thickness is listed below each option (1\", 1.5\", or 1.75\").",
+    "image_url": "/_next/image/?url=https%3A%2F%2Fi.ytimg.com%2Fvi%2Fl6zbECAumRw%2Fmaxresdefault.jpg&w=3840&q=75",
+    "rating": null,
+    "review_count": 0,
+    "in_stock": true
+  },
+  {
+    "brand": "Vari",
+    "url": "https://www.vari.com/electric-standing-desk-60x30/FD-ESD6030.html",
+    "title": "Electric Standing Desk 60x30",
+    "price": 349.0,
+    "currency": "USD",
+    "description": "Build a better home office with the desk backed by an industry-best lifetime warranty.",
+    "image_url": "https://www.vari.com/on/demandware.static/-/Sites-varius-site-catalog/default/dwab2d5b1e/header-menu-banner/image-placeholder.png",
+    "rating": null,
+    "review_count": 0,
+    "in_stock": true
+  }
+]
