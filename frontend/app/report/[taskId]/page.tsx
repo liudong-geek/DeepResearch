@@ -3,6 +3,41 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { getResearchResult, pollResearchStatus, ResearchResult, ResearchStatus } from '@/lib/api'
+import { CitationList, CitationSource } from '@/components/citations'
+
+// 从报告数据中提取所有引用来源
+function extractCitations(result: ResearchResult): CitationSource[] {
+  const citations: CitationSource[] = []
+
+  // 从 comparison_table.sources 提取
+  if (result.comparison_table?.sources) {
+    result.comparison_table.sources.forEach((source: any) => {
+      if (source._source) {
+        citations.push(source._source)
+      } else {
+        // 兼容旧格式
+        citations.push({
+          type: 'product_page',
+          url: source.url || '',
+          brand: source.brand,
+          extracted_at: source.extracted_at || new Date().toISOString(),
+          data_points: source.data_points,
+        })
+      }
+    })
+  }
+
+  // 从 reddit_discussions 提取
+  if (result.reddit_discussions) {
+    result.reddit_discussions.forEach((post: any) => {
+      if (post._source) {
+        citations.push(post._source)
+      }
+    })
+  }
+
+  return citations
+}
 
 export default function ReportPage() {
   const params = useParams()
@@ -88,6 +123,10 @@ export default function ReportPage() {
   }
 
   // 显示结果
+  if (!result) {
+    return null
+  }
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
       <div className="max-w-6xl mx-auto">
@@ -123,7 +162,14 @@ export default function ReportPage() {
             {/* 数据来源数量 */}
             {result.metadata?.data_sources !== undefined && (
               <div className="text-sm text-gray-600">
-                数据来源: <span className="font-semibold text-blue-600">{result.metadata.data_sources}</span> 个
+                数据来源: <span className="font-semibold text-blue-600">
+                  {typeof result.metadata.data_sources === 'number'
+                    ? result.metadata.data_sources
+                    : (result.metadata.data_sources.products || 0) +
+                      (result.metadata.data_sources.reviews || 0) +
+                      (result.metadata.data_sources.reddit_posts || 0)
+                  }
+                </span> 个
               </div>
             )}
 
@@ -137,7 +183,7 @@ export default function ReportPage() {
         </div>
 
         {/* 数据统计卡片 */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-4 gap-4 mb-6">
           <div className="bg-blue-50 rounded-lg p-4 text-center">
             <div className="text-2xl font-bold text-blue-600">
               {result.competitors.length}
@@ -147,9 +193,22 @@ export default function ReportPage() {
 
           <div className="bg-green-50 rounded-lg p-4 text-center">
             <div className="text-2xl font-bold text-green-600">
-              {result.comparison_table?.sources?.length || result.metadata?.data_sources || 0}
+              {result.comparison_table?.sources?.length ||
+               (typeof result.metadata?.data_sources === 'object'
+                 ? result.metadata.data_sources.products
+                 : result.metadata?.data_sources) || 0}
             </div>
-            <div className="text-sm text-gray-600">数据来源</div>
+            <div className="text-sm text-gray-600">产品数据</div>
+          </div>
+
+          <div className="bg-orange-50 rounded-lg p-4 text-center">
+            <div className="text-2xl font-bold text-orange-600">
+              {result.reddit_discussions?.length ||
+               (typeof result.metadata?.data_sources === 'object'
+                 ? result.metadata.data_sources.reddit_posts
+                 : 0) || 0}
+            </div>
+            <div className="text-sm text-gray-600">Reddit 讨论</div>
           </div>
 
           <div className="bg-purple-50 rounded-lg p-4 text-center">
@@ -195,64 +254,13 @@ export default function ReportPage() {
         {/* 行动计划 */}
         <ActionPlan data={result.action_plan} />
 
-        {/* 数据来源 */}
-        {result.comparison_table?.sources && result.comparison_table.sources.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">📚 数据来源</h2>
-            <div className="space-y-3">
-              {result.comparison_table.sources.map((source: any, idx: number) => (
-                <div key={idx} className="border-l-4 border-blue-500 pl-4 py-2">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="font-semibold text-gray-900 mb-1">
-                        {source.brand}
-                      </div>
-                      <a
-                        href={source.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-blue-600 hover:underline break-all"
-                      >
-                        {source.url}
-                      </a>
-                      {source.data_points && source.data_points.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {source.data_points.map((point: string, i: number) => (
-                            <span
-                              key={i}
-                              className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded"
-                            >
-                              {point}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    {source.extracted_at && (
-                      <div className="text-xs text-gray-500 ml-4 whitespace-nowrap">
-                        {new Date(source.extracted_at).toLocaleString('zh-CN', {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* 数据可信度说明 */}
-            <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-              <div className="text-sm text-gray-700">
-                <span className="font-semibold">💡 数据可信度说明：</span>
-                所有数据均来自公开网页，遵守网站 robots.txt 规则，采用限速抓取。
-                每个结论都可追溯到原始数据源，确保透明度和可审计性。
-              </div>
-            </div>
-          </div>
+        {/* Reddit 讨论 */}
+        {result.reddit_discussions && result.reddit_discussions.length > 0 && (
+          <RedditDiscussions data={result.reddit_discussions} />
         )}
+
+        {/* 数据来源 - 使用新的 CitationList 组件 */}
+        <CitationList sources={extractCitations(result)} className="mb-6" />
 
         {/* 返回按钮 */}
         <div className="text-center mt-8">
@@ -338,6 +346,83 @@ function ComparisonTable({ data }: { data: any }) {
           {JSON.stringify(data, null, 2)}
         </pre>
       </details>
+    </div>
+  )
+}
+
+// Reddit 讨论组件
+function RedditDiscussions({ data }: { data: any[] }) {
+  if (!data || data.length === 0) {
+    return null
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+      <h2 className="text-2xl font-bold text-gray-900 mb-4">💬 Reddit 讨论</h2>
+
+      <div className="space-y-4">
+        {data.slice(0, 5).map((post: any, idx: number) => (
+          <div key={idx} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+            {/* 标题 */}
+            <div className="flex items-start justify-between mb-2">
+              <h3 className="font-semibold text-gray-900 flex-1">
+                {post.title}
+              </h3>
+              {post.score !== undefined && (
+                <div className="flex items-center gap-1 ml-4">
+                  <span className="text-orange-500">⬆</span>
+                  <span className="text-sm font-semibold text-gray-700">{post.score}</span>
+                </div>
+              )}
+            </div>
+
+            {/* 内容预览 */}
+            {post.content && (
+              <p className="text-sm text-gray-600 mb-2 line-clamp-3">
+                {post.content}
+              </p>
+            )}
+
+            {/* 元信息 */}
+            <div className="flex items-center gap-4 text-xs text-gray-500">
+              {post.subreddit && (
+                <span className="flex items-center gap-1">
+                  <span>📍</span>
+                  <span>r/{post.subreddit}</span>
+                </span>
+              )}
+              {post.author && (
+                <span className="flex items-center gap-1">
+                  <span>👤</span>
+                  <span>u/{post.author}</span>
+                </span>
+              )}
+              {post.num_comments !== undefined && (
+                <span className="flex items-center gap-1">
+                  <span>💬</span>
+                  <span>{post.num_comments} 评论</span>
+                </span>
+              )}
+              {post.url && (
+                <a
+                  href={post.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline ml-auto"
+                >
+                  查看原帖 →
+                </a>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {data.length > 5 && (
+        <div className="mt-4 text-center text-sm text-gray-500">
+          还有 {data.length - 5} 个讨论未显示
+        </div>
+      )}
     </div>
   )
 }

@@ -7,16 +7,16 @@ import json
 from loguru import logger
 
 from ..shared import BaseMCPServer, MCPTool, MCPResource, TextContent
-from .scrapers import AmazonReviewScraper
+from .scrapers import AmazonReviewScraper, RedditReviewScraper
 
 
 class ReviewMCPServer(BaseMCPServer):
     """
     Review MCP Server
-    
+
     提供评论抓取和分析功能
     """
-    
+
     def __init__(self):
         super().__init__(
             name="review",
@@ -24,12 +24,13 @@ class ReviewMCPServer(BaseMCPServer):
             rate_limit=0.3,  # 每 3.3 秒 1 个请求（更保守）
             cache_ttl=7 * 24 * 3600,  # 7 天缓存
         )
-        
+
         # 初始化爬虫
         self.scrapers = {
             "amazon": AmazonReviewScraper(self.rate_limiter, self.cache),
+            "reddit": RedditReviewScraper(self.rate_limiter, self.cache),
         }
-        
+
         logger.info(f"Review MCP Server 已初始化，支持: {list(self.scrapers.keys())}")
     
     def get_tools(self) -> List[MCPTool]:
@@ -43,8 +44,8 @@ class ReviewMCPServer(BaseMCPServer):
                     "properties": {
                         "platform": {
                             "type": "string",
-                            "description": "平台名称（amazon）",
-                            "enum": ["amazon"],
+                            "description": "平台名称（amazon/reddit）",
+                            "enum": ["amazon", "reddit"],
                         },
                         "product_id": {
                             "type": "string",
@@ -67,8 +68,8 @@ class ReviewMCPServer(BaseMCPServer):
                     "properties": {
                         "platform": {
                             "type": "string",
-                            "description": "平台名称（amazon）",
-                            "enum": ["amazon"],
+                            "description": "平台名称（amazon/reddit）",
+                            "enum": ["amazon", "reddit"],
                         },
                         "product_id": {
                             "type": "string",

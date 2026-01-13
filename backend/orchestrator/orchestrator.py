@@ -13,13 +13,14 @@ from openai import AsyncOpenAI
 
 from mcp_servers.ecommerce import EcommerceMCPServer
 from mcp_servers.review import ReviewMCPServer
+from mcp_servers.content import ContentMCPServer
 
 
 class ResearchOrchestrator:
     """
     调研编排器
 
-    协调 E-commerce MCP 和 Review MCP，生成结构化的竞品调研报告
+    协调 E-commerce MCP、Review MCP 和 Content MCP，生成结构化的竞品调研报告
 
     支持的 LLM 提供商（通过环境变量配置）：
     - OpenAI (默认)
@@ -87,6 +88,7 @@ class ResearchOrchestrator:
         # 初始化 MCP Servers
         self.ecommerce_server = EcommerceMCPServer()
         self.review_server = ReviewMCPServer()
+        self.content_server = ContentMCPServer()
 
         logger.info(f"Research Orchestrator 已初始化 (Provider: {self.provider}, Model: {self.model})")
 
@@ -115,20 +117,24 @@ class ResearchOrchestrator:
         logger.info("Step 1: 抓取竞品产品信息...")
         product_data = await self._fetch_product_data(competitors)
 
-        # Step 2: 抓取评论数据（暂时跳过，因为 Amazon 需要登录）
+        # Step 2: 抓取评论数据
         logger.info("Step 2: 抓取评论数据...")
         review_data = await self._fetch_review_data(competitors)
 
-        # Step 3: 使用 LLM 生成竞品对比表
-        logger.info("Step 3: 生成竞品对比表...")
+        # Step 3: 抓取 Reddit 讨论内容
+        logger.info("Step 3: 抓取 Reddit 讨论内容...")
+        reddit_data = await self._fetch_reddit_content(keyword)
+
+        # Step 4: 使用 LLM 生成竞品对比表
+        logger.info("Step 4: 生成竞品对比表...")
         comparison_table = await self._generate_comparison_table(product_data)
 
-        # Step 4: 使用 LLM 分析评论洞察
-        logger.info("Step 4: 分析评论洞察...")
-        review_insights = await self._analyze_reviews(review_data)
+        # Step 5: 使用 LLM 分析评论洞察
+        logger.info("Step 5: 分析评论洞察...")
+        review_insights = await self._analyze_reviews(review_data, reddit_data)
 
-        # Step 5: 使用 LLM 生成行动计划
-        logger.info("Step 5: 生成行动计划...")
+        # Step 6: 使用 LLM 生成行动计划
+        logger.info("Step 6: 生成行动计划...")
         action_plan = await self._generate_action_plan(
             comparison_table,
             review_insights,
@@ -151,10 +157,15 @@ class ResearchOrchestrator:
                 "generated_at": end_time.isoformat(),
                 "duration_seconds": duration,
                 "confidence": confidence,
-                "data_sources": len(product_data),
+                "data_sources": {
+                    "products": len(product_data),
+                    "reviews": len(review_data),
+                    "reddit_posts": len(reddit_data),
+                },
             },
             "comparison_table": comparison_table,
             "review_insights": review_insights,
+            "reddit_discussions": reddit_data,
             "action_plan": action_plan,
             "efficiency_comparison": {
                 "manual_hours": 8,  # 估计人工需要 8 小时
@@ -231,6 +242,57 @@ class ResearchOrchestrator:
         logger.warning("评论抓取暂时跳过（Amazon 需要登录）")
         return []
 
+    async def _fetch_reddit_content(
+        self,
+        keyword: str
+    ) -> List[Dict[str, Any]]:
+        """抓取 Reddit 讨论内容"""
+        results = []
+
+        try:
+            # 搜索相关子版块的讨论
+            # 例如：standing desk -> r/StandingDesk
+            subreddit_map = {
+                "standing desk": "r/StandingDesk",
+                "desk": "r/StandingDesk",
+                # 可以添加更多映射
+            }
+
+            # 尝试从映射中获取子版块，否则使用关键词搜索
+            query = subreddit_map.get(keyword.lower(), keyword)
+
+            logger.info(f"抓取 Reddit 内容: {query}")
+
+            # 调用 Content MCP
+            result = await self.content_server.call_tool(
+                "get_content",
+                {"source": "reddit", "query": query, "limit": 10}
+            )
+
+            # 解析结果
+            if result and len(result) > 0:
+                data = json.loads(result[0].text)
+
+                if "contents" in data and data["contents"]:
+                    for post in data["contents"]:
+                        # 添加来源信息
+                        post['_source'] = {
+                            'type': 'reddit_post',
+                            'url': post.get('url', ''),
+                            'subreddit': post.get('subreddit', ''),
+                            'extracted_at': datetime.now().isoformat(),
+                        }
+                        results.append(post)
+
+                    logger.info(f"✅ Reddit: 获取 {len(results)} 个讨论")
+                else:
+                    logger.warning(f"⚠️  Reddit: 未获取到讨论")
+
+        except Exception as e:
+            logger.error(f"❌ Reddit 内容抓取失败: {e}")
+
+        return results
+
     async def _generate_comparison_table(
         self,
         product_data: List[Dict[str, Any]]
@@ -298,19 +360,36 @@ class ResearchOrchestrator:
 
     async def _analyze_reviews(
         self,
-        review_data: List[Dict[str, Any]]
+        review_data: List[Dict[str, Any]],
+        reddit_data: List[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """使用 LLM 分析评论"""
-        if not review_data:
+        """使用 LLM 分析评论和 Reddit 讨论"""
+        if not review_data and not reddit_data:
             return {
-                "note": "暂无评论数据（Amazon 需要登录）",
+                "note": "暂无评论和讨论数据",
                 "topics": [],
                 "sentiment": {},
                 "insights": []
             }
 
-        # TODO: 实现评论分析
-        return {}
+        # 如果有 Reddit 数据，提取关键洞察
+        reddit_insights = []
+        if reddit_data:
+            for post in reddit_data[:5]:  # 只分析前 5 个帖子
+                reddit_insights.append({
+                    "title": post.get("title", ""),
+                    "content": post.get("content", "")[:500],  # 限制长度
+                    "score": post.get("score", 0),
+                    "num_comments": post.get("num_comments", 0),
+                })
+
+        return {
+            "note": "评论分析基于 Reddit 讨论",
+            "reddit_insights": reddit_insights,
+            "total_posts": len(reddit_data) if reddit_data else 0,
+            "topics": [],  # TODO: 使用 LLM 提取主题
+            "sentiment": {},  # TODO: 使用 LLM 分析情感
+        }
 
     async def _generate_action_plan(
         self,
@@ -542,12 +621,18 @@ class ResearchOrchestrator:
 
     async def cleanup(self):
         """清理资源"""
-        # 关闭浏览器
+        # 关闭浏览器（仅对有浏览器的爬虫）
         for scraper in self.ecommerce_server.scrapers.values():
-            await scraper._close_browser()
+            if hasattr(scraper, '_close_browser') and callable(getattr(scraper, '_close_browser')):
+                await scraper._close_browser()
 
         for scraper in self.review_server.scrapers.values():
-            await scraper._close_browser()
+            if hasattr(scraper, '_close_browser') and callable(getattr(scraper, '_close_browser')):
+                await scraper._close_browser()
+
+        for scraper in self.content_server.scrapers.values():
+            if hasattr(scraper, '_close_browser') and callable(getattr(scraper, '_close_browser')):
+                await scraper._close_browser()
 
         logger.info("资源已清理")
 

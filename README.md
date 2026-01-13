@@ -4,14 +4,15 @@
 
 ## 🎯 项目特点
 
-- ✅ **引用溯源**：每个结论可追溯到原始数据源（URL + 引用片段）
-- ✅ **MCP 架构**：垂直领域 MCP Server 集群，标准化数据采集能力
-- ✅ **智能编排**：轻量级 Agent + LLM Function Calling，自动生成结构化报告
+- ✅ **引用溯源**：每个结论可追溯到原始数据源（URL + 引用片段），前端可点击查看详情
+- ✅ **MCP 架构**：3 个垂直领域 MCP Server（E-commerce, Review, Content），标准化数据采集
+- ✅ **智能编排**：6 步调研流程，自动生成结构化报告（竞品对比、评论洞察、行动计划）
 - ✅ **多 LLM 支持**：支持 OpenAI、Qwen（通义千问）等多种 LLM
 - ✅ **国内可用**：支持阿里云 Qwen，无需国际网络
-- ✅ **爬虫稳定**：限速/重试/去重/缓存/增量抓取机制
-- ✅ **前端体验**：Next.js + shadcn/ui，实时进度 + 可视化报告
-- ✅ **一键运行**：Docker Compose 统一编排所有服务
+- ✅ **爬虫稳定**：限速/重试/去重/缓存机制，7 天缓存
+- ✅ **前端体验**：Next.js + TypeScript，实时进度 + 可视化报告 + 引用气泡
+- ✅ **Reddit 集成**：抓取 Reddit 讨论，获取真实用户反馈
+- ✅ **文章提取**：支持 Wirecutter、RTINGS、PCMag 等测评网站
 
 ## 🏗️ 技术架构
 
@@ -28,13 +29,50 @@
                        │ MCP Protocol
 ┌──────────────────────▼──────────────────────────────────────┐
 │                   MCP Server 集群                            │
-│  E-commerce │ Review │ Content │ SEO │ Social               │
+│  E-commerce (8 品牌) │ Review (2 平台) │ Content (2 来源)   │
 └──────────────────────┬──────────────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────────────┐
-│         数据层 (PostgreSQL + pgvector + Redis)               │
+│         共享组件 (限速器 + 缓存管理器 + 日志系统)              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+## 📊 功能清单
+
+### 数据采集
+
+| MCP Server | 数据源 | 状态 | 说明 |
+|-----------|--------|------|------|
+| **E-commerce MCP** | 8 个品牌 | ✅ | Uplift, Jarvis, Vari, Humanscale, FlexiSpot, Autonomous, IKEA, Monoprice |
+| **Review MCP** | 2 个平台 | ✅ | Amazon（需登录）, Reddit |
+| **Content MCP** | 2 个来源 | ✅ | Reddit 讨论, 测评文章（Wirecutter, RTINGS, PCMag） |
+
+### 调研流程
+
+1. ✅ **Step 1**: 抓取竞品产品信息（价格、功能、规格）
+2. ✅ **Step 2**: 抓取评论数据（Amazon、Reddit）
+3. ✅ **Step 3**: 抓取 Reddit 讨论内容（真实用户反馈）
+4. ✅ **Step 4**: 生成竞品对比表（LLM 分析）
+5. ✅ **Step 5**: 分析评论洞察（含 Reddit 讨论）
+6. ✅ **Step 6**: 生成行动计划（定价、上新、产品页建议）
+
+### 前端功能
+
+- ✅ 竞品选择（按价格档次分类）
+- ✅ 实时进度追踪
+- ✅ 竞品对比表展示
+- ✅ Reddit 讨论展示
+- ✅ 引用溯源组件（可点击查看数据来源）
+- ✅ 数据统计卡片（竞品数、产品数、Reddit 讨论数、置信度）
+- ✅ 效率对比展示（人工 vs 工具）
+
+### 引用溯源
+
+- ✅ 每个数据点都有 `_source` 字段
+- ✅ 引用气泡组件（CitationBubble）
+- ✅ 引用列表组件（CitationList）
+- ✅ 按类型分组显示（产品页、评论、Reddit、文章）
+- ✅ 显示提取时间和数据点
 
 ## 🚀 快速开始
 
@@ -83,17 +121,43 @@ LLM_MODEL=gpt-4o-mini
 
 📖 **详细配置教程**：
 - [完整快速开始指南](QUICKSTART.md)
+- [Qwen 配置指南](docs/QWEN_SETUP.md)
 
-#### 3️⃣ 测试配置
+#### 3️⃣ 配置 Reddit API（可选，推荐）
+
+Reddit API 可以提供更稳定的数据访问，避免 403 错误。
 
 ```bash
-cd backend
-.venv/bin/python ../test_qwen.py  # 测试 Qwen
-# 或
-.venv/bin/python ../test_end_to_end.py  # 完整测试
+# 编辑 backend/.env 文件
+REDDIT_CLIENT_ID=your_client_id
+REDDIT_CLIENT_SECRET=your_client_secret
+REDDIT_USER_AGENT=DeepResearch/1.0 by YourUsername
 ```
 
-#### 4️⃣ 启动应用
+📖 **详细申请教程**：
+- [Reddit API 申请和配置指南](docs/REDDIT_API_SETUP.md)
+
+**测试 Reddit API**:
+```bash
+python test_reddit_api.py
+```
+
+**注意**: 不配置也可以使用，系统会自动降级到 JSON API（可能遇到 403 错误）。
+
+#### 4️⃣ 测试配置
+
+```bash
+# 测试 LLM
+python test_qwen.py
+
+# 测试 Reddit API（可选）
+python test_reddit_api.py
+
+# 完整端到端测试
+python test_end_to_end.py
+```
+
+#### 5️⃣ 启动应用
 
 ```bash
 ./start_dev.sh
@@ -195,17 +259,30 @@ SERP_API_KEY=...     # Google 搜索 API
 - [最终总结](./FINAL_SUMMARY.md) - 功能完成度和使用指南
 - [故障排除](./TROUBLESHOOTING.md) - 常见问题和解决方案
 
+### 配置文档
+- [Qwen 配置指南](./docs/QWEN_SETUP.md) - Qwen API 申请和配置
+- [Reddit API 配置指南](./docs/REDDIT_API_SETUP.md) - Reddit API 申请和配置（可选）
+- [Reddit API 快速参考](./docs/REDDIT_API_QUICK_REF.md) - 5 分钟快速配置
+
+### 开发文档
+- [系统设计](./DESIGN.md) - 架构设计和技术选型
+- [项目结构](./PROJECT_STRUCTURE.md) - 文件结构和代码组织
+- [实现文档](./docs/IMPLEMENTATION.md) - 详细的实现说明
+
 ## 🧪 测试
 
 ```bash
-# 端到端测试（推荐）
-make local-test-e2e
+# 测试 LLM 配置
+python test_qwen.py
+
+# 测试 Reddit API 配置（可选）
+python test_reddit_api.py
 
 # 测试所有爬虫
-cd backend && .venv/bin/python ../test_all_scrapers.py
+python test_all_scrapers.py
 
-# 测试 LLM 集成
-cd backend && .venv/bin/python ../test_qwen.py
+# 端到端测试
+python test_end_to_end.py
 ```
 
 ## 📈 性能指标

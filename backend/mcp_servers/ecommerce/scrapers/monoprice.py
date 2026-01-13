@@ -1,7 +1,7 @@
 """
 Monoprice 爬虫（专用，处理 Cloudflare）
 """
-from typing import Any, Dict
+from typing import Any, Dict, List
 from datetime import datetime
 
 from loguru import logger
@@ -149,13 +149,41 @@ class MonopriceScraper(BaseScraper):
             "[itemprop='image']",
             ".gallery img",
         ]
-        
+
         for selector in selectors:
             img = soup.select_one(selector)
             if img:
                 src = img.get("src") or img.get("data-src")
                 if src and "logo" not in src.lower():
                     return self._make_absolute_url(src, base_url)
-        
+
         return None
+
+    async def get_product_specs(self, url: str) -> Dict[str, Any]:
+        """
+        获取产品详细规格
+
+        Args:
+            url: 产品页面 URL
+
+        Returns:
+            产品规格字典
+        """
+        logger.info(f"[Monoprice] 获取产品规格: {url}")
+        logger.warning("[Monoprice] 规格提取尚未实现")
+        return {"brand": "Monoprice", "url": url, "specs": {}}
+
+    async def search_products(self, keyword: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        搜索产品
+
+        Args:
+            keyword: 搜索关键词
+            limit: 返回结果数量
+
+        Returns:
+            产品列表
+        """
+        logger.warning("[Monoprice] 搜索功能尚未实现")
+        return []
 

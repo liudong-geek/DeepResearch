@@ -229,7 +229,61 @@ npm install
 
 ---
 
-### 问题 10: 前端无法连接后端
+### 问题 10: Reddit API 返回 403 错误
+
+**错误信息**:
+```
+403 Forbidden
+Reddit API error
+```
+
+**原因**:
+1. 未配置 Reddit API 凭证
+2. 使用 JSON API 遇到反爬虫限制
+3. Client ID 或 Secret 不正确
+
+**解决方案**:
+
+**方案 1: 配置 Reddit API（推荐）**
+
+```bash
+# 1. 申请 Reddit API
+# 访问 https://www.reddit.com/prefs/apps
+# 创建 "script" 类型应用
+
+# 2. 配置环境变量
+# 编辑 backend/.env
+REDDIT_CLIENT_ID=your_client_id
+REDDIT_CLIENT_SECRET=your_client_secret
+REDDIT_USER_AGENT=DeepResearch/1.0 by YourUsername
+
+# 3. 安装 PRAW
+cd backend
+source .venv/bin/activate
+pip install praw
+
+# 4. 测试配置
+python test_reddit_api.py
+```
+
+**方案 2: 使用 VPN 或代理**
+
+如果不想配置 API，可以尝试：
+```bash
+# 使用代理（如果有）
+export HTTP_PROXY=http://your-proxy:port
+export HTTPS_PROXY=http://your-proxy:port
+```
+
+**方案 3: 等待重试**
+
+Reddit 的限制可能是临时的，等待几分钟后重试。
+
+📖 **详细教程**: [docs/REDDIT_API_SETUP.md](docs/REDDIT_API_SETUP.md)
+
+---
+
+### 问题 11: 前端无法连接后端
 
 **错误信息**:
 ```
@@ -240,14 +294,14 @@ Network Error
 **解决方案**:
 ```bash
 # 1. 检查后端是否运行
-curl http://localhost:8000/api/health
+curl http://localhost:8001/api/health
 
 # 2. 检查 CORS 配置
-# 编辑 backend/api/main.py，确保 CORS 允许前端域名
+# 编辑 backend/main.py，确保 CORS 允许前端域名
 
 # 3. 检查环境变量
 # 编辑 frontend/.env.local
-NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_URL=http://localhost:8001
 ```
 
 ---

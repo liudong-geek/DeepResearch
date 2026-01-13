@@ -179,19 +179,101 @@ class UpliftScraper(BaseScraper):
     async def search_products(self, keyword: str, limit: int = 10) -> List[Dict[str, Any]]:
         """
         搜索产品
-        
+
         Args:
             keyword: 搜索关键词
             limit: 返回结果数量
-            
+
         Returns:
             产品列表
         """
         logger.info(f"[Uplift] 搜索产品: {keyword}, limit={limit}")
-        
-        # TODO: 实现搜索功能
-        # 这里需要根据 Uplift 网站的实际搜索 API 或页面结构来实现
-        
-        logger.warning("[Uplift] 搜索功能尚未实现")
-        return []
+
+        try:
+            # Uplift 搜索 URL
+            search_url = f"https://www.upliftdesk.com/search/?q={keyword.replace(' ', '+')}"
+
+            # 获取搜索结果页面
+            html = await self._fetch_html(search_url, use_js=True)
+            soup = self._parse_html(html)
+
+            products = []
+
+            # 查找产品列表（根据 Uplift 网站结构）
+            # 尝试多种可能的选择器
+            product_selectors = [
+                ".product-item",
+                ".product-card",
+                ".search-result-item",
+                "article.product",
+                ".product",
+            ]
+
+            product_elements = []
+            for selector in product_selectors:
+                product_elements = soup.select(selector)
+                if product_elements:
+                    logger.debug(f"[Uplift] 使用选择器: {selector}, 找到 {len(product_elements)} 个产品")
+                    break
+
+            if not product_elements:
+                logger.warning(f"[Uplift] 未找到产品列表，尝试从链接中提取")
+                # 降级方案：查找所有包含 "desk" 的产品链接
+                all_links = soup.find_all("a", href=True)
+                for link in all_links:
+                    href = link.get("href", "")
+                    if "/desk" in href.lower() and "product" in href.lower():
+                        title = self._clean_text(link.text) or "Unknown Product"
+                        if len(title) > 5:
+                            products.append({
+                                "brand": "Uplift",
+                                "title": title,
+                                "url": self._make_absolute_url(href, search_url),
+                                "price": None,
+                                "image_url": None,
+                            })
+                            if len(products) >= limit:
+                                break
+            else:
+                # 从产品元素中提取信息
+                for elem in product_elements[:limit]:
+                    try:
+                        # 提取标题
+                        title_elem = elem.select_one("h2, h3, h4, .product-title, .product-name")
+                        title = self._clean_text(title_elem.text) if title_elem else "Unknown Product"
+
+                        # 提取链接
+                        link_elem = elem.select_one("a[href]")
+                        url = self._make_absolute_url(link_elem.get("href"), search_url) if link_elem else None
+
+                        # 提取价格
+                        price_elem = elem.select_one(".price, .product-price, [class*='price']")
+                        price = self._parse_price(price_elem.text) if price_elem else None
+
+                        # 提取图片
+                        img_elem = elem.select_one("img")
+                        image_url = None
+                        if img_elem:
+                            image_url = img_elem.get("src") or img_elem.get("data-src")
+                            if image_url:
+                                image_url = self._make_absolute_url(image_url, search_url)
+
+                        if title and url:
+                            products.append({
+                                "brand": "Uplift",
+                                "title": title,
+                                "url": url,
+                                "price": price,
+                                "image_url": image_url,
+                            })
+                    except Exception as e:
+                        logger.warning(f"[Uplift] 提取产品信息失败: {e}")
+                        continue
+
+            logger.info(f"[Uplift] 搜索完成，找到 {len(products)} 个产品")
+            return products
+
+        except Exception as e:
+            logger.error(f"[Uplift] 搜索失败: {e}")
+            return []
 

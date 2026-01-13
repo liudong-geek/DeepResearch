@@ -176,7 +176,77 @@ class AmazonReviewScraper(BaseReviewScraper):
 
         return topics
 
+    def _analyze_sentiment(self, reviews: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        情感分析
 
+        基于评分和关键词进行简单的情感分析
+        """
+        if not reviews:
+            return {
+                "positive_count": 0,
+                "negative_count": 0,
+                "neutral_count": 0,
+                "positive_percentage": 0.0,
+                "negative_percentage": 0.0,
+                "neutral_percentage": 0.0,
+                "average_rating": 0.0,
+            }
+
+        positive_count = 0
+        negative_count = 0
+        neutral_count = 0
+        total_rating = 0
+
+        # 正面和负面关键词
+        positive_keywords = [
+            "great", "excellent", "amazing", "love", "perfect", "best",
+            "fantastic", "wonderful", "awesome", "solid", "sturdy", "stable",
+            "recommend", "happy", "satisfied", "quality", "worth"
+        ]
+
+        negative_keywords = [
+            "bad", "terrible", "awful", "hate", "worst", "poor",
+            "disappointed", "waste", "broken", "defective", "unstable",
+            "wobble", "cheap", "flimsy", "regret", "return"
+        ]
+
+        for review in reviews:
+            rating = review.get("rating", 0)
+            text = review.get("text", "").lower()
+
+            total_rating += rating
+
+            # 基于评分的情感分类
+            if rating >= 4:
+                positive_count += 1
+            elif rating <= 2:
+                negative_count += 1
+            else:
+                # 对于中性评分（3星），使用关键词分析
+                positive_score = sum(1 for kw in positive_keywords if kw in text)
+                negative_score = sum(1 for kw in negative_keywords if kw in text)
+
+                if positive_score > negative_score:
+                    positive_count += 1
+                elif negative_score > positive_score:
+                    negative_count += 1
+                else:
+                    neutral_count += 1
+
+        total = len(reviews)
+        average_rating = total_rating / total if total > 0 else 0
+
+        return {
+            "positive_count": positive_count,
+            "negative_count": negative_count,
+            "neutral_count": neutral_count,
+            "positive_percentage": round(positive_count / total * 100, 2) if total > 0 else 0,
+            "negative_percentage": round(negative_count / total * 100, 2) if total > 0 else 0,
+            "neutral_percentage": round(neutral_count / total * 100, 2) if total > 0 else 0,
+            "average_rating": round(average_rating, 2),
+            "total_reviews": total,
+        }
 
     def _extract_typical_reviews(self, reviews: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
         """提取典型评论"""

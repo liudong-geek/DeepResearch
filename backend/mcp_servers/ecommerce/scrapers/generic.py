@@ -241,12 +241,205 @@ class GenericScraper(BaseScraper):
             return url
     
     async def get_product_specs(self, url: str) -> Dict[str, Any]:
-        """获取产品详细规格（暂未实现）"""
-        logger.warning(f"[{self.brand_name}] 规格提取尚未实现")
-        return {"brand": self.brand_name, "url": url, "specs": {}}
+        """获取产品详细规格"""
+        logger.info(f"[{self.brand_name}] 获取产品规格: {url}")
+
+        try:
+            # 获取产品页面
+            html = await self._fetch_html(url, use_js=True)
+            soup = self._parse_html(html)
+
+            specs = {}
+
+            # 尝试多种常见的规格表选择器
+            spec_selectors = [
+                ".specs-table",
+                ".specifications",
+                ".product-specs",
+                ".product-details",
+                "table.specs",
+                "[class*='spec']",
+                "[id*='spec']",
+            ]
+
+            spec_container = None
+            for selector in spec_selectors:
+                spec_container = soup.select_one(selector)
+                if spec_container:
+                    logger.debug(f"[{self.brand_name}] 找到规格容器: {selector}")
+                    break
+
+            if spec_container:
+                # 从表格中提取规格
+                rows = spec_container.select("tr")
+                for row in rows:
+                    cols = row.select("td, th")
+                    if len(cols) >= 2:
+                        key = self._clean_text(cols[0].text)
+                        value = self._clean_text(cols[1].text)
+                        if key and value:
+                            specs[key] = value
+
+                # 如果表格没有数据，尝试从列表中提取
+                if not specs:
+                    items = spec_container.select("li, div")
+                    for item in items:
+                        text = self._clean_text(item.text)
+                        if ":" in text:
+                            parts = text.split(":", 1)
+                            if len(parts) == 2:
+                                key = parts[0].strip()
+                                value = parts[1].strip()
+                                if key and value:
+                                    specs[key] = value
+
+            # 提取常见规格字段
+            common_specs = {
+                "dimensions": None,
+                "weight_capacity": None,
+                "height_range": None,
+                "material": None,
+                "warranty": None,
+            }
+
+            for key, value in specs.items():
+                key_lower = key.lower()
+                if "dimension" in key_lower or "size" in key_lower:
+                    common_specs["dimensions"] = value
+                elif "weight" in key_lower and ("capacity" in key_lower or "limit" in key_lower):
+                    common_specs["weight_capacity"] = value
+                elif "height" in key_lower and "range" in key_lower:
+                    common_specs["height_range"] = value
+                elif "material" in key_lower:
+                    common_specs["material"] = value
+                elif "warranty" in key_lower:
+                    common_specs["warranty"] = value
+
+            result = {
+                "brand": self.brand_name,
+                "url": url,
+                "specs": specs,
+                "common_specs": common_specs,
+            }
+
+            if specs:
+                logger.info(f"[{self.brand_name}] 规格提取成功，共 {len(specs)} 项")
+            else:
+                logger.warning(f"[{self.brand_name}] 未找到规格信息")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"[{self.brand_name}] 规格提取失败: {e}")
+            return {"brand": self.brand_name, "url": url, "specs": {}, "error": str(e)}
     
     async def search_products(self, keyword: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """搜索产品（暂未实现）"""
-        logger.warning(f"[{self.brand_name}] 搜索功能尚未实现")
-        return []
+        """搜索产品（通用实现）"""
+        logger.info(f"[{self.brand_name}] 搜索产品: {keyword}, limit={limit}")
+
+        try:
+            # 构建搜索 URL（尝试常见的搜索路径）
+            search_paths = [
+                f"/search?q={keyword.replace(' ', '+')}",
+                f"/search/?q={keyword.replace(' ', '+')}",
+                f"/search/{keyword.replace(' ', '-')}",
+                f"/products?search={keyword.replace(' ', '+')}",
+            ]
+
+            products = []
+
+            # 尝试每个搜索路径
+            for search_path in search_paths:
+                if products:  # 如果已经找到产品，跳出循环
+                    break
+
+                try:
+                    # 构建完整的搜索 URL
+                    # 需要从品牌名推断基础 URL
+                    base_urls = {
+                        "FlexiSpot": "https://www.flexispot.com",
+                        "Autonomous": "https://www.autonomous.ai",
+                        "Humanscale": "https://www.humanscale.com",
+                        "IKEA": "https://www.ikea.com",
+                    }
+
+                    base_url = base_urls.get(self.brand_name, f"https://www.{self.brand_name.lower()}.com")
+                    search_url = base_url + search_path
+
+                    logger.debug(f"[{self.brand_name}] 尝试搜索 URL: {search_url}")
+
+                    # 获取搜索结果页面
+                    html = await self._fetch_html(search_url, use_js=True)
+                    soup = self._parse_html(html)
+
+                    # 查找产品列表
+                    product_selectors = [
+                        ".product-item",
+                        ".product-card",
+                        ".search-result",
+                        "article.product",
+                        ".product",
+                        "[class*='product-']",
+                    ]
+
+                    product_elements = []
+                    for selector in product_selectors:
+                        product_elements = soup.select(selector)
+                        if product_elements:
+                            logger.debug(f"[{self.brand_name}] 使用选择器: {selector}, 找到 {len(product_elements)} 个产品")
+                            break
+
+                    if product_elements:
+                        # 从产品元素中提取信息
+                        for elem in product_elements[:limit]:
+                            try:
+                                # 提取标题
+                                title_elem = elem.select_one("h2, h3, h4, .product-title, .product-name, [class*='title']")
+                                title = self._clean_text(title_elem.text) if title_elem else None
+
+                                # 提取链接
+                                link_elem = elem.select_one("a[href]")
+                                url = None
+                                if link_elem:
+                                    href = link_elem.get("href")
+                                    url = self._make_absolute_url(href, base_url)
+
+                                # 提取价格
+                                price_elem = elem.select_one(".price, .product-price, [class*='price']")
+                                price = self._parse_price(price_elem.text) if price_elem else None
+
+                                # 提取图片
+                                img_elem = elem.select_one("img")
+                                image_url = None
+                                if img_elem:
+                                    image_url = img_elem.get("src") or img_elem.get("data-src")
+                                    if image_url:
+                                        image_url = self._make_absolute_url(image_url, base_url)
+
+                                if title and url:
+                                    products.append({
+                                        "brand": self.brand_name,
+                                        "title": title,
+                                        "url": url,
+                                        "price": price,
+                                        "image_url": image_url,
+                                    })
+                            except Exception as e:
+                                logger.warning(f"[{self.brand_name}] 提取产品信息失败: {e}")
+                                continue
+
+                except Exception as e:
+                    logger.debug(f"[{self.brand_name}] 搜索路径 {search_path} 失败: {e}")
+                    continue
+
+            if not products:
+                logger.warning(f"[{self.brand_name}] 未找到产品，搜索功能可能需要针对该品牌定制")
+            else:
+                logger.info(f"[{self.brand_name}] 搜索完成，找到 {len(products)} 个产品")
+
+            return products
+
+        except Exception as e:
+            logger.error(f"[{self.brand_name}] 搜索失败: {e}")
+            return []
 
