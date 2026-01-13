@@ -7,16 +7,16 @@ import json
 from loguru import logger
 
 from ..shared import BaseMCPServer, MCPTool, MCPResource, TextContent
-from .scrapers import UpliftScraper, JarvisScraper, VariScraper
+from .scrapers import UpliftScraper, JarvisScraper, VariScraper, GenericScraper, MonopriceScraper
 
 
 class EcommerceMCPServer(BaseMCPServer):
     """
     E-commerce MCP Server
-    
+
     提供电商产品信息抓取功能
     """
-    
+
     def __init__(self):
         super().__init__(
             name="ecommerce",
@@ -24,18 +24,35 @@ class EcommerceMCPServer(BaseMCPServer):
             rate_limit=0.5,  # 每 2 秒 1 个请求
             cache_ttl=7 * 24 * 3600,  # 7 天缓存
         )
-        
+
         # 初始化爬虫
+        # Premium 品牌（专用爬虫）
         self.scrapers = {
             "uplift": UpliftScraper(self.rate_limiter, self.cache),
             "jarvis": JarvisScraper(self.rate_limiter, self.cache),
             "vari": VariScraper(self.rate_limiter, self.cache),
+            "humanscale": GenericScraper("Humanscale", self.rate_limiter, self.cache),
         }
-        
+
+        # Mid-range 品牌（通用爬虫）
+        self.scrapers.update({
+            "flexispot": GenericScraper("FlexiSpot", self.rate_limiter, self.cache),
+            "autonomous": GenericScraper("Autonomous", self.rate_limiter, self.cache),
+        })
+
+        # Budget 品牌（通用爬虫 + 专用爬虫）
+        self.scrapers.update({
+            "ikea": GenericScraper("IKEA", self.rate_limiter, self.cache),
+            "monoprice": MonopriceScraper(self.rate_limiter, self.cache),  # 专用爬虫（处理 Cloudflare）
+        })
+
         logger.info(f"E-commerce MCP Server 已初始化，支持: {list(self.scrapers.keys())}")
     
     def get_tools(self) -> List[MCPTool]:
         """获取工具列表"""
+        # 动态生成支持的品牌列表
+        supported_brands = list(self.scrapers.keys())
+
         return [
             MCPTool(
                 name="get_product_info",
@@ -45,8 +62,8 @@ class EcommerceMCPServer(BaseMCPServer):
                     "properties": {
                         "brand": {
                             "type": "string",
-                            "description": "品牌名称（uplift/jarvis/vari）",
-                            "enum": ["uplift", "jarvis", "vari"],
+                            "description": f"品牌名称（{'/'.join(supported_brands)}）",
+                            "enum": supported_brands,
                         },
                         "url": {
                             "type": "string",
@@ -64,8 +81,8 @@ class EcommerceMCPServer(BaseMCPServer):
                     "properties": {
                         "brand": {
                             "type": "string",
-                            "description": "品牌名称（uplift/jarvis/vari）",
-                            "enum": ["uplift", "jarvis", "vari"],
+                            "description": f"品牌名称（{'/'.join(supported_brands)}）",
+                            "enum": supported_brands,
                         },
                         "url": {
                             "type": "string",
@@ -83,8 +100,8 @@ class EcommerceMCPServer(BaseMCPServer):
                     "properties": {
                         "brand": {
                             "type": "string",
-                            "description": "品牌名称（uplift/jarvis/vari）",
-                            "enum": ["uplift", "jarvis", "vari"],
+                            "description": f"品牌名称（{'/'.join(supported_brands)}）",
+                            "enum": supported_brands,
                         },
                         "keyword": {
                             "type": "string",

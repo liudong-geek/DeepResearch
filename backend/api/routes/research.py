@@ -76,9 +76,19 @@ class ResearchResult(BaseModel):
 
 # 竞品 URL 映射
 COMPETITOR_URLS = {
+    # Premium 品牌
     "uplift": "https://www.upliftdesk.com/uplift-v2-standing-desk-v2-or-v2-commercial/",
     "vari": "https://www.vari.com/electric-standing-desk-60x30/FD-ESD6030.html",
     "jarvis": "https://www.fully.com/standing-desks/jarvis.html",
+    "humanscale": "https://www.humanscale.com/products/sit-stand-desks/float-height-adjustable-desk",
+
+    # Mid-range 品牌
+    "flexispot": "https://www.flexispot.com/height-adjustable-desks/electric-height-adjustable-standing-desk-e7",
+    "autonomous": "https://www.autonomous.ai/standing-desks/smartdesk-2-home",
+
+    # Budget 品牌
+    "ikea": "https://www.ikea.com/us/en/p/bekant-desk-sit-stand-white-s49022538/",
+    "monoprice": "https://www.monoprice.com/product?p_id=15722",
 }
 
 

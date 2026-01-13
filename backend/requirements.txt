@@ -29,6 +29,7 @@ openai>=1.10.0
 # Utils
 loguru>=0.7.0
 python-dotenv>=1.0.0
+tenacity>=8.2.0  # 重试机制
 
 # Development
 pytest>=7.4.0

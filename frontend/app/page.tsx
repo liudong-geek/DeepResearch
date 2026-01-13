@@ -11,7 +11,22 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const availableCompetitors = ['Uplift', 'Jarvis', 'Vari', 'Autonomous']
+  // 竞品列表（按价格档次分类）
+  const availableCompetitors = [
+    // Premium 品牌
+    { id: 'Uplift', name: 'Uplift', category: 'Premium', price: '$$$' },
+    { id: 'Jarvis', name: 'Jarvis (Fully)', category: 'Premium', price: '$$$' },
+    { id: 'Vari', name: 'Vari', category: 'Premium', price: '$$$' },
+    { id: 'Humanscale', name: 'Humanscale', category: 'Premium', price: '$$$$' },
+
+    // Mid-range 品牌
+    { id: 'FlexiSpot', name: 'FlexiSpot', category: 'Mid-range', price: '$$' },
+    { id: 'Autonomous', name: 'Autonomous', category: 'Mid-range', price: '$$' },
+
+    // Budget 品牌
+    { id: 'IKEA', name: 'IKEA Bekant', category: 'Budget', price: '$' },
+    { id: 'Monoprice', name: 'Monoprice', category: 'Budget', price: '$' },
+  ]
 
   const toggleCompetitor = (competitor: string) => {
     setCompetitors(prev =>
@@ -96,24 +111,39 @@ export default function Home() {
 
           {/* 竞品选择 */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              选择竞品（至少1个）
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              选择竞品（至少1个，建议3-5个）
             </label>
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              {availableCompetitors.map(competitor => (
-                <button
-                  key={competitor}
-                  onClick={() => toggleCompetitor(competitor)}
-                  className={`px-4 py-3 rounded-lg border-2 transition-all ${
-                    competitors.includes(competitor)
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-                  }`}
-                >
-                  {competitor}
-                </button>
-              ))}
-            </div>
+
+            {/* 按价格档次分组 */}
+            {['Premium', 'Mid-range', 'Budget'].map(category => {
+              const categoryCompetitors = availableCompetitors.filter(c => c.category === category)
+              return (
+                <div key={category} className="mb-4">
+                  <div className="text-xs font-semibold text-gray-500 mb-2 uppercase">
+                    {category}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {categoryCompetitors.map(competitor => (
+                      <button
+                        key={competitor.id}
+                        onClick={() => toggleCompetitor(competitor.id)}
+                        className={`px-3 py-2 rounded-lg border-2 transition-all text-sm ${
+                          competitors.includes(competitor.id)
+                            ? 'border-blue-500 bg-blue-50 text-blue-700'
+                            : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span>{competitor.name}</span>
+                          <span className="text-xs text-gray-500">{competitor.price}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
 
             {/* 自定义竞品 */}
             <div className="flex gap-2">

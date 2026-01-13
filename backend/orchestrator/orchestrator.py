@@ -64,7 +64,7 @@ class ResearchOrchestrator:
             if not self.base_url:
                 self.base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
             if not self.model:
-                self.model = "qwen-plus"  # 或 qwen-turbo, qwen-max
+                self.model = "qwen-max"  # 或 qwen-turbo, qwen-max
             logger.info(f"使用 Qwen 模型: {self.model}")
         elif self.provider == "openai":
             # OpenAI 配置
@@ -139,6 +139,9 @@ class ResearchOrchestrator:
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
 
+        # 计算数据置信度
+        confidence = self._calculate_confidence(product_data, comparison_table)
+
         # 组装最终报告
         report = {
             "metadata": {
@@ -147,6 +150,8 @@ class ResearchOrchestrator:
                 "competitors": [c["brand"] for c in competitors],
                 "generated_at": end_time.isoformat(),
                 "duration_seconds": duration,
+                "confidence": confidence,
+                "data_sources": len(product_data),
             },
             "comparison_table": comparison_table,
             "review_insights": review_insights,
@@ -158,7 +163,7 @@ class ResearchOrchestrator:
             },
         }
 
-        logger.info(f"调研完成，耗时 {duration:.1f} 秒")
+        logger.info(f"调研完成，耗时 {duration:.1f} 秒，置信度 {confidence:.0%}")
 
         return report
 
@@ -185,6 +190,16 @@ class ResearchOrchestrator:
                 # 解析结果
                 if result and len(result) > 0:
                     data = json.loads(result[0].text)
+
+                    # 添加来源信息（用于引用溯源）
+                    data['_source'] = {
+                        'type': 'product_page',
+                        'url': url,
+                        'brand': brand,
+                        'extracted_at': datetime.now().isoformat(),
+                        'data_points': list(data.keys())
+                    }
+
                     results.append(data)
                     logger.info(f"✅ {brand}: {data.get('title', 'N/A')}")
                 else:
@@ -195,7 +210,13 @@ class ResearchOrchestrator:
                 results.append({
                     "brand": brand,
                     "url": url,
-                    "error": str(e)
+                    "error": str(e),
+                    '_source': {
+                        'type': 'error',
+                        'url': url,
+                        'brand': brand,
+                        'extracted_at': datetime.now().isoformat()
+                    }
                 })
 
         return results
@@ -365,27 +386,66 @@ class ResearchOrchestrator:
         return f"""
 请分析以下竞品产品数据，生成结构化的竞品对比表。
 
+**重要**:
+1. 每个数据点必须标注来源 URL
+2. price 必须是数字类型（如 299.99），不要用字符串
+3. 在 sources 字段中列出所有数据来源
+
 产品数据：
 {products_json}
 
 请生成 JSON 格式的对比表，包含以下维度：
-1. 价格带（price_range）：各品牌的价格区间和定位
-2. 核心卖点（key_features）：每个品牌的主要卖点
-3. 产品描述（descriptions）：产品描述的重点
+1. 价格带（price_comparison）：各品牌的价格区间和定位
+2. 核心卖点（feature_comparison）：每个品牌的主要卖点
+3. 产品描述（description_analysis）：产品描述的重点
 4. 图片质量（image_quality）：产品图片的专业程度评估
 
-输出格式（注意：price 必须是数字类型，不要用字符串）：
+输出格式示例：
 {{
   "price_comparison": {{
-    "brand_name": {{"price": 299.99, "positioning": "定位描述"}}
+    "Uplift": {{
+      "price": 299.99,
+      "positioning": "中端定位，性价比高",
+      "source_url": "https://www.upliftdesk.com/..."
+    }},
+    "Vari": {{
+      "price": 349.00,
+      "positioning": "偏高端定价，强调品质",
+      "source_url": "https://www.vari.com/..."
+    }}
   }},
   "feature_comparison": {{
-    "brand_name": ["卖点1", "卖点2", ...]
+    "Uplift": ["多种桌面厚度选项", "模块化设计", "7年保修"],
+    "Vari": ["终身保修", "快速发货", "简约设计"]
   }},
-  "summary": "总体对比总结",
+  "description_analysis": {{
+    "Uplift": "强调定制化和灵活性",
+    "Vari": "强调品质和可靠性"
+  }},
+  "image_quality": {{
+    "Uplift": "专业产品图，多角度展示",
+    "Vari": "高质量渲染图，场景化展示"
+  }},
+  "summary": "总体对比总结（2-3句话）",
   "sources": [
-    {{"brand": "品牌", "url": "来源URL", "data_points": ["提取的数据点"]}}
-  ]
+    {{
+      "brand": "Uplift",
+      "url": "https://www.upliftdesk.com/...",
+      "data_points": ["price", "features", "description", "images"],
+      "extracted_at": "2026-01-12T21:30:00Z"
+    }},
+    {{
+      "brand": "Vari",
+      "url": "https://www.vari.com/...",
+      "data_points": ["price", "features", "description", "images"],
+      "extracted_at": "2026-01-12T21:30:00Z"
+    }}
+  ],
+  "metadata": {{
+    "total_competitors": 2,
+    "data_sources": 2,
+    "confidence": 0.85
+  }}
 }}
 """
 
@@ -437,6 +497,48 @@ class ResearchOrchestrator:
   }}
 }}
 """
+
+    def _calculate_confidence(
+        self,
+        product_data: List[Dict[str, Any]],
+        comparison_table: Dict[str, Any]
+    ) -> float:
+        """
+        计算数据置信度
+
+        评分维度：
+        1. 数据来源数量 (40%)
+        2. 数据完整性 (30%)
+        3. 数据新鲜度 (30%)
+        """
+        score = 0.0
+
+        # 1. 数据来源数量 (40%)
+        # 3个以上来源得满分
+        num_sources = len([d for d in product_data if 'error' not in d])
+        source_score = min(num_sources / 3, 1.0) * 0.4
+        score += source_score
+
+        # 2. 数据完整性 (30%)
+        # 检查必需字段是否存在
+        required_fields = ['price', 'title', 'description']
+        if num_sources > 0:
+            completeness = sum(
+                1 for data in product_data
+                if 'error' not in data and all(field in data for field in required_fields)
+            ) / num_sources
+            score += completeness * 0.3
+
+        # 3. 数据新鲜度 (30%)
+        # 假设数据都是新抓取的，给满分
+        score += 0.3
+
+        # 如果 LLM 返回了 metadata.confidence，也考虑进去
+        if isinstance(comparison_table, dict) and 'metadata' in comparison_table:
+            llm_confidence = comparison_table['metadata'].get('confidence', 1.0)
+            score = score * 0.7 + llm_confidence * 0.3
+
+        return round(min(score, 1.0), 2)
 
     async def cleanup(self):
         """清理资源"""
