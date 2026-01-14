@@ -59,6 +59,15 @@ class GenericScraper(BaseScraper):
             # 4. 提取图片
             image_url = self._extract_image(soup, url)
             
+            # 价格验证和警告
+            price_warning = None
+            if price < 100:
+                price_warning = "价格异常偏低，可能是配件或数据抓取错误"
+                logger.warning(f"[{self.brand_name}] {price_warning}: ${price}")
+            elif price > 3000:
+                price_warning = "价格异常偏高，可能包含配件或套装"
+                logger.warning(f"[{self.brand_name}] {price_warning}: ${price}")
+
             result = {
                 "brand": self.brand_name,
                 "url": url,
@@ -70,9 +79,10 @@ class GenericScraper(BaseScraper):
                 "rating": None,
                 "review_count": 0,
                 "in_stock": True,
+                "price_warning": price_warning,  # 添加价格警告
             }
-            
-            logger.info(f"[{self.brand_name}] 产品信息提取成功: {title}")
+
+            logger.info(f"[{self.brand_name}] 产品信息提取成功: {title} - ${price}")
             return result
             
         except Exception as e:
@@ -111,21 +121,57 @@ class GenericScraper(BaseScraper):
         return "Unknown Product"
     
     def _extract_price_from_html(self, html: str) -> float:
-        """从 HTML 中提取价格"""
+        """
+        从 HTML 中提取价格
+
+        策略：
+        1. 提取所有价格
+        2. 过滤合理范围（$50-$5000）
+        3. 优先选择主产品价格（$200-$2000）
+        4. 如果没有主产品价格，选择次优价格
+        """
         # 匹配 $xxx.xx 或 $xxx,xxx.xx 格式
         price_matches = re.findall(r'\$(\d+(?:,\d{3})*(?:\.\d{2})?)', html)
-        
+
         if not price_matches:
+            logger.warning(f"[{self.brand_name}] 未找到价格信息")
             return 0.0
-        
-        # 转换为浮点数
-        prices = [float(p.replace(',', '')) for p in price_matches]
-        
-        # 过滤合理价格范围（升降桌通常 $100-$3000）
-        reasonable_prices = [p for p in prices if 100 <= p <= 3000]
-        
-        # 返回最小价格（通常是起始价）
-        return min(reasonable_prices) if reasonable_prices else (min(prices) if prices else 0.0)
+
+        # 转换为浮点数并去重
+        prices = list(set([float(p.replace(',', '')) for p in price_matches]))
+        prices.sort()  # 从小到大排序
+
+        logger.debug(f"[{self.brand_name}] 找到价格: {prices[:10]}")  # 只显示前10个
+
+        # 过滤合理价格范围（升降桌及配件通常 $50-$5000）
+        reasonable_prices = [p for p in prices if 50 <= p <= 5000]
+
+        if not reasonable_prices:
+            logger.warning(f"[{self.brand_name}] 没有合理范围内的价格，使用原始价格")
+            return min(prices) if prices else 0.0
+
+        # 优先选择主产品价格范围（$200-$2000）
+        main_product_prices = [p for p in reasonable_prices if 200 <= p <= 2000]
+
+        if main_product_prices:
+            # 返回主产品价格中的最小值（通常是起始价）
+            selected_price = min(main_product_prices)
+            logger.info(f"[{self.brand_name}] 选择主产品价格: ${selected_price}")
+            return selected_price
+
+        # 如果没有主产品价格，选择次优价格（$100-$200 或 $2000-$5000）
+        secondary_prices = [p for p in reasonable_prices if 100 <= p < 200 or 2000 < p <= 5000]
+
+        if secondary_prices:
+            # 优先选择较高的价格（更可能是主产品）
+            selected_price = max(secondary_prices) if max(secondary_prices) > 200 else min(secondary_prices)
+            logger.warning(f"[{self.brand_name}] 未找到主产品价格，选择次优价格: ${selected_price}")
+            return selected_price
+
+        # 最后的降级方案：选择最小的合理价格
+        selected_price = min(reasonable_prices)
+        logger.warning(f"[{self.brand_name}] 使用降级方案，选择最小价格: ${selected_price}")
+        return selected_price
     
     def _extract_description(self, soup) -> str:
         """提取产品描述"""

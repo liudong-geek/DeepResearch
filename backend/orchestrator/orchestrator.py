@@ -97,6 +97,7 @@ class ResearchOrchestrator:
         keyword: str,
         market: str,
         competitors: List[Dict[str, str]],
+        progress_callback: Optional[callable] = None,
     ) -> Dict[str, Any]:
         """
         运行完整的调研流程
@@ -105,6 +106,7 @@ class ResearchOrchestrator:
             keyword: 产品关键词（如 "standing desk"）
             market: 目标市场（如 "US"）
             competitors: 竞品列表，格式: [{"brand": "uplift", "url": "..."}]
+            progress_callback: 进度回调函数，签名: (step: int, total_steps: int, message: str) -> None
 
         Returns:
             调研报告
@@ -112,29 +114,42 @@ class ResearchOrchestrator:
         logger.info(f"开始调研: keyword={keyword}, market={market}, competitors={len(competitors)}")
 
         start_time = datetime.now()
+        total_steps = 6
 
         # Step 1: 抓取竞品产品信息
         logger.info("Step 1: 抓取竞品产品信息...")
+        if progress_callback:
+            progress_callback(1, total_steps, f"Step 1/6: 抓取 {len(competitors)} 个竞品产品信息...")
         product_data = await self._fetch_product_data(competitors)
 
         # Step 2: 抓取评论数据
         logger.info("Step 2: 抓取评论数据...")
+        if progress_callback:
+            progress_callback(2, total_steps, "Step 2/6: 抓取评论数据...")
         review_data = await self._fetch_review_data(competitors)
 
         # Step 3: 抓取 Reddit 讨论内容
         logger.info("Step 3: 抓取 Reddit 讨论内容...")
+        if progress_callback:
+            progress_callback(3, total_steps, "Step 3/6: 抓取 Reddit 讨论内容...")
         reddit_data = await self._fetch_reddit_content(keyword)
 
         # Step 4: 使用 LLM 生成竞品对比表
         logger.info("Step 4: 生成竞品对比表...")
+        if progress_callback:
+            progress_callback(4, total_steps, "Step 4/6: 使用 AI 生成竞品对比表...")
         comparison_table = await self._generate_comparison_table(product_data)
 
         # Step 5: 使用 LLM 分析评论洞察
         logger.info("Step 5: 分析评论洞察...")
+        if progress_callback:
+            progress_callback(5, total_steps, "Step 5/6: 使用 AI 分析评论洞察...")
         review_insights = await self._analyze_reviews(review_data, reddit_data)
 
         # Step 6: 使用 LLM 生成行动计划
         logger.info("Step 6: 生成行动计划...")
+        if progress_callback:
+            progress_callback(6, total_steps, "Step 6/6: 使用 AI 生成行动计划...")
         action_plan = await self._generate_action_plan(
             comparison_table,
             review_insights,
@@ -469,9 +484,13 @@ class ResearchOrchestrator:
 1. 每个数据点必须标注来源 URL
 2. price 必须是数字类型（如 299.99），不要用字符串
 3. 在 sources 字段中列出所有数据来源
+4. **价格验证**: 如果某个品牌的价格异常（<$100 或 >$3000），请在 positioning 中标注"价格异常，需人工核实"
 
 产品数据：
 {products_json}
+
+**注意**: 部分产品可能包含 price_warning 字段，表示价格可能不准确（如配件价格、数据抓取错误等）。
+请在生成对比表时考虑这些警告，并在 positioning 中说明。
 
 请生成 JSON 格式的对比表，包含以下维度：
 1. 价格带（price_comparison）：各品牌的价格区间和定位

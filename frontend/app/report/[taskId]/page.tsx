@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { getResearchResult, pollResearchStatus, ResearchResult, ResearchStatus } from '@/lib/api'
-import { CitationList, CitationSource } from '@/components/citations'
+import { CitationList, CitationSource, CitationBubble } from '@/components/citations'
 
 // 从报告数据中提取所有引用来源
 function extractCitations(result: ResearchResult): CitationSource[] {
@@ -37,6 +37,13 @@ function extractCitations(result: ResearchResult): CitationSource[] {
   }
 
   return citations
+}
+
+// 根据品牌名查找引用来源
+function findSourceByBrand(sources: CitationSource[], brand: string): CitationSource | undefined {
+  return sources.find(s =>
+    s.brand?.toLowerCase() === brand.toLowerCase()
+  )
 }
 
 export default function ReportPage() {
@@ -287,6 +294,20 @@ function ComparisonTable({ data }: { data: any }) {
     )
   }
 
+  // 提取引用来源
+  const sources: CitationSource[] = []
+  if (data.sources && Array.isArray(data.sources)) {
+    data.sources.forEach((source: any, idx: number) => {
+      sources.push({
+        type: 'product_page',
+        url: source.url || source.source_url || '',
+        brand: source.brand,
+        extracted_at: source.extracted_at || new Date().toISOString(),
+        data_points: source.data_points || ['price', 'features'],
+      })
+    })
+  }
+
   return (
     <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
       <h2 className="text-2xl font-bold text-gray-900 mb-4">📊 竞品对比</h2>
@@ -296,7 +317,7 @@ function ComparisonTable({ data }: { data: any }) {
         <div className="mb-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-3">💰 价格对比</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {Object.entries(data.price_comparison).map(([brand, info]: [string, any]) => {
+            {Object.entries(data.price_comparison).map(([brand, info]: [string, any], idx: number) => {
               // 确保 price 是数字
               const price = typeof info.price === 'number'
                 ? info.price
@@ -304,9 +325,20 @@ function ComparisonTable({ data }: { data: any }) {
                   ? parseFloat(info.price)
                   : null
 
+              // 查找对应的引用来源
+              const source = findSourceByBrand(sources, brand)
+
               return (
                 <div key={brand} className="border border-gray-200 rounded-lg p-4">
-                  <div className="font-semibold text-gray-900 mb-2">{brand}</div>
+                  <div className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    {brand}
+                    {source && (
+                      <CitationBubble
+                        number={sources.indexOf(source) + 1}
+                        source={source}
+                      />
+                    )}
+                  </div>
                   <div className="text-2xl font-bold text-blue-600 mb-2">
                     {price !== null && !isNaN(price) ? `$${price.toFixed(2)}` : info.price || 'N/A'}
                   </div>
@@ -323,16 +355,29 @@ function ComparisonTable({ data }: { data: any }) {
         <div className="mb-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-3">✨ 功能对比</h3>
           <div className="space-y-4">
-            {Object.entries(data.feature_comparison).map(([brand, features]: [string, any]) => (
-              <div key={brand} className="border border-gray-200 rounded-lg p-4">
-                <div className="font-semibold text-gray-900 mb-2">{brand}</div>
-                <ul className="list-disc list-inside space-y-1">
-                  {Array.isArray(features) && features.map((feature: string, idx: number) => (
-                    <li key={idx} className="text-sm text-gray-700">{feature}</li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+            {Object.entries(data.feature_comparison).map(([brand, features]: [string, any]) => {
+              // 查找对应的引用来源
+              const source = findSourceByBrand(sources, brand)
+
+              return (
+                <div key={brand} className="border border-gray-200 rounded-lg p-4">
+                  <div className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    {brand}
+                    {source && (
+                      <CitationBubble
+                        number={sources.indexOf(source) + 1}
+                        source={source}
+                      />
+                    )}
+                  </div>
+                  <ul className="list-disc list-inside space-y-1">
+                    {Array.isArray(features) && features.map((feature: string, idx: number) => (
+                      <li key={idx} className="text-sm text-gray-700">{feature}</li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
@@ -361,20 +406,30 @@ function RedditDiscussions({ data }: { data: any[] }) {
       <h2 className="text-2xl font-bold text-gray-900 mb-4">💬 Reddit 讨论</h2>
 
       <div className="space-y-4">
-        {data.slice(0, 5).map((post: any, idx: number) => (
-          <div key={idx} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-            {/* 标题 */}
-            <div className="flex items-start justify-between mb-2">
-              <h3 className="font-semibold text-gray-900 flex-1">
-                {post.title}
-              </h3>
-              {post.score !== undefined && (
-                <div className="flex items-center gap-1 ml-4">
-                  <span className="text-orange-500">⬆</span>
-                  <span className="text-sm font-semibold text-gray-700">{post.score}</span>
-                </div>
-              )}
-            </div>
+        {data.slice(0, 5).map((post: any, idx: number) => {
+          // 提取引用来源
+          const source: CitationSource | undefined = post._source ? post._source : undefined
+
+          return (
+            <div key={idx} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+              {/* 标题 */}
+              <div className="flex items-start justify-between mb-2">
+                <h3 className="font-semibold text-gray-900 flex-1 flex items-center gap-2">
+                  {post.title}
+                  {source && (
+                    <CitationBubble
+                      number={idx + 1}
+                      source={source}
+                    />
+                  )}
+                </h3>
+                {post.score !== undefined && (
+                  <div className="flex items-center gap-1 ml-4">
+                    <span className="text-orange-500">⬆</span>
+                    <span className="text-sm font-semibold text-gray-700">{post.score}</span>
+                  </div>
+                )}
+              </div>
 
             {/* 内容预览 */}
             {post.content && (
@@ -414,8 +469,9 @@ function RedditDiscussions({ data }: { data: any[] }) {
                 </a>
               )}
             </div>
-          </div>
-        ))}
+            </div>
+          )
+        })}
       </div>
 
       {data.length > 5 && (

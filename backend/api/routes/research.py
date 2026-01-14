@@ -57,11 +57,17 @@ class ResearchResult(BaseModel):
     market: str
     competitors: List[str]
 
+    # 元数据
+    metadata: dict | None = None
+
     # 竞品对比表
     comparison_table: dict
 
     # 评论洞察
     review_insights: dict
+
+    # Reddit 讨论
+    reddit_discussions: list | None = None
 
     # 行动计划
     action_plan: dict
@@ -121,19 +127,30 @@ async def run_research_task(task_id: UUID, request: ResearchRequest):
         if not competitors:
             raise ValueError("没有有效的竞品")
 
-        # 更新进度
-        research_tasks[task_id]["progress"] = 20
-        research_tasks[task_id]["current_step"] = f"开始调研 {len(competitors)} 个竞品..."
+        # 定义进度回调函数
+        def update_progress(step: int, total_steps: int, message: str):
+            """更新任务进度"""
+            # 计算进度百分比（20% - 95%，留 5% 给最后的清理工作）
+            progress = 20 + int((step / total_steps) * 75)
+            research_tasks[task_id]["progress"] = progress
+            research_tasks[task_id]["current_step"] = message
+            logger.info(f"[Task {task_id}] {progress}% - {message}")
 
-        # 运行调研
+        # 更新进度
+        update_progress(0, 6, f"开始调研 {len(competitors)} 个竞品...")
+
+        # 运行调研（传入进度回调）
         logger.info(f"[Task {task_id}] 开始调研...")
         result = await orchestrator.run_research(
             keyword=request.keyword,
             market=request.market,
-            competitors=competitors
+            competitors=competitors,
+            progress_callback=update_progress
         )
 
         # 清理资源
+        research_tasks[task_id]["progress"] = 95
+        research_tasks[task_id]["current_step"] = "清理资源..."
         await orchestrator.cleanup()
 
         # 更新任务状态
@@ -244,8 +261,10 @@ async def get_research_result(task_id: UUID):
         keyword=task["keyword"],
         market=task["market"],
         competitors=task["competitors"],
+        metadata=result.get("metadata"),
         comparison_table=result.get("comparison_table", {}),
         review_insights=result.get("review_insights", {}),
+        reddit_discussions=result.get("reddit_discussions"),
         action_plan=result.get("action_plan", {}),
         efficiency_comparison=result.get("efficiency_comparison", {}),
     )

@@ -3,6 +3,7 @@ Reddit 内容爬虫实现
 """
 from typing import Any, Dict, List
 import httpx
+import random
 
 from loguru import logger
 
@@ -12,11 +13,33 @@ from .base import BaseContentScraper
 class RedditContentScraper(BaseContentScraper):
     """
     Reddit 内容爬虫
-    
+
     抓取 Reddit 子版块的帖子和评论内容
+
+    使用 Reddit JSON API（无需认证）:
+    - 子版块: https://www.reddit.com/r/subreddit/hot.json
+    - 搜索: https://www.reddit.com/search.json?q=keyword
+
+    优点:
+    - 无需申请 Reddit API
+    - 无需配置 Client ID/Secret
+    - 简单易用
+
+    注意:
+    - 可能遇到 403 错误（反爬虫）
+    - 请求频率限制较严格
+    - 建议配置 Reddit API 以获得更好的稳定性
     """
-    
+
     BASE_URL = "https://www.reddit.com"
+
+    # User-Agent 池（模拟不同浏览器）
+    USER_AGENTS = [
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+    ]
     
     async def get_content(
         self,
@@ -45,17 +68,43 @@ class RedditContentScraper(BaseContentScraper):
                 # 搜索关键词
                 url = f"{self.BASE_URL}/search.json?q={query}&limit={limit}&sort=relevance"
             
+            # 随机选择 User-Agent（模拟不同浏览器）
             headers = {
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                "User-Agent": random.choice(self.USER_AGENTS),
+                "Accept": "application/json",
+                "Accept-Language": "en-US,en;q=0.9",
             }
-            
+
             # 限速
             await self.rate_limiter.acquire()
-            
-            async with httpx.AsyncClient() as client:
-                response = await client.get(url, headers=headers, timeout=30.0)
-                response.raise_for_status()
-                data = response.json()
+
+            # 添加重试机制
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    async with httpx.AsyncClient() as client:
+                        response = await client.get(url, headers=headers, timeout=30.0, follow_redirects=True)
+                        response.raise_for_status()
+                        data = response.json()
+                        break  # 成功，跳出重试循环
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 403:
+                        logger.warning(f"[Reddit Content] 遇到 403 错误（尝试 {attempt + 1}/{max_retries}）")
+                        if attempt < max_retries - 1:
+                            # 等待后重试
+                            import asyncio
+                            await asyncio.sleep(2 ** attempt)  # 指数退避
+                            continue
+                        else:
+                            logger.error(f"[Reddit Content] 403 错误，建议配置 Reddit API")
+                            return {
+                                "source": "reddit",
+                                "query": query,
+                                "total": 0,
+                                "contents": [],
+                                "error": "403 Forbidden - 建议配置 Reddit API 以获得更好的稳定性",
+                            }
+                    raise
             
             # 解析 Reddit JSON 响应
             posts = []

@@ -42,11 +42,29 @@ class UpliftScraper(BaseScraper):
             # 价格 - 从 HTML 中搜索价格模式
             import re
             price_matches = re.findall(r'\$(\d+(?:,\d{3})*(?:\.\d{2})?)', html)
-            # 过滤掉小额价格（可能是配件），取合理范围内的最小价格作为起始价
-            prices = [float(p.replace(',', '')) for p in price_matches if p]
-            # 升降桌价格通常在 $300-$2000 之间
-            reasonable_prices = [p for p in prices if 300 <= p <= 2000]
-            price = min(reasonable_prices) if reasonable_prices else (max(prices) if prices else 0.0)
+            # 转换为浮点数并去重
+            prices = list(set([float(p.replace(',', '')) for p in price_matches if p]))
+            prices.sort()
+
+            logger.debug(f"[Uplift] 找到价格: {prices[:10]}")
+
+            # 过滤合理价格范围（$50-$5000）
+            reasonable_prices = [p for p in prices if 50 <= p <= 5000]
+
+            # 优先选择主产品价格范围（$200-$2000）
+            main_product_prices = [p for p in reasonable_prices if 200 <= p <= 2000]
+
+            if main_product_prices:
+                price = min(main_product_prices)
+                logger.info(f"[Uplift] 选择主产品价格: ${price}")
+            elif reasonable_prices:
+                # 选择次优价格（较高的更可能是主产品）
+                secondary_prices = [p for p in reasonable_prices if 100 <= p < 200 or 2000 < p <= 5000]
+                price = max(secondary_prices) if secondary_prices and max(secondary_prices) > 200 else min(reasonable_prices)
+                logger.warning(f"[Uplift] 选择次优价格: ${price}")
+            else:
+                price = max(prices) if prices else 0.0
+                logger.warning(f"[Uplift] 使用降级方案: ${price}")
 
             # 描述 - 查找包含产品描述的段落（跳过前几个可能是导航的段落）
             desc_paragraphs = soup.find_all("p")
