@@ -843,16 +843,48 @@ def needs_js_rendering(soup):
 
 ---
 
-### 5️⃣ Social MCP Server（社交媒体）
+### 4️⃣ SEO/Ads MCP Server（SEO 和广告数据）❌ **未实现**
+
+**职责**: 分析竞品 SEO 和广告策略
+
+**Tools**:
+- `google_search(keyword, market)` → 搜索结果
+- `get_serp_features(keyword)` → Featured Snippet/People Also Ask
+- `analyze_ad_copy(brand)` → 广告文案分析
+
+**数据源**:
+- Google Search（通过 SerpAPI）
+- Google Ads Library（如可访问）
+
+**实现状态**: ❌ **未实现**
+- 需要 SerpAPI 付费订阅（$50-200/月）
+- Google Ads Library 访问受限
+- 当前需求未明确要求 SEO/广告数据
+
+**优先级**: 低（v1.1+ 可选功能）
+
+---
+
+### 5️⃣ Social MCP Server（社交媒体）⚠️ **部分实现**
+
 **职责**: 社交平台讨论分析
 
 **Tools**:
-- `search_reddit(subreddit, keyword)` → 帖子列表
-- `get_twitter_mentions(brand)` → 推文列表
+- ✅ `search_reddit(subreddit, keyword)` → 帖子列表（已实现）
+- ❌ `get_twitter_mentions(brand)` → 推文列表（未实现）
+- ❌ `get_facebook_discussions(brand)` → Facebook 群组（未实现）
 
 **数据源**:
-- Reddit API
-- Twitter/X API（需 API Key）
+- ✅ Reddit API（已实现，在 Content MCP 中）
+- ❌ Twitter/X API（未实现，需付费 $100/月起）
+- ❌ Facebook API（未实现，需审核）
+
+**实现状态**: ⚠️ **部分实现（33%）**
+- ✅ Reddit: 已实现，支持 API + JSON 双模式
+- ❌ Twitter/X: 未实现，需付费 API
+- ❌ Facebook: 未实现，需审核
+
+**优先级**: 中（Reddit 已满足核心需求）
 
 ---
 

@@ -14,6 +14,7 @@ from openai import AsyncOpenAI
 from mcp_servers.ecommerce import EcommerceMCPServer
 from mcp_servers.review import ReviewMCPServer
 from mcp_servers.content import ContentMCPServer
+from mcp_servers.seo import SEOMCPServer
 
 
 class ResearchOrchestrator:
@@ -89,6 +90,7 @@ class ResearchOrchestrator:
         self.ecommerce_server = EcommerceMCPServer()
         self.review_server = ReviewMCPServer()
         self.content_server = ContentMCPServer()
+        self.seo_server = SEOMCPServer()
 
         logger.info(f"Research Orchestrator 已初始化 (Provider: {self.provider}, Model: {self.model})")
 
@@ -114,45 +116,52 @@ class ResearchOrchestrator:
         logger.info(f"开始调研: keyword={keyword}, market={market}, competitors={len(competitors)}")
 
         start_time = datetime.now()
-        total_steps = 6
+        total_steps = 7  # 增加 SEO 步骤
 
         # Step 1: 抓取竞品产品信息
         logger.info("Step 1: 抓取竞品产品信息...")
         if progress_callback:
-            progress_callback(1, total_steps, f"Step 1/6: 抓取 {len(competitors)} 个竞品产品信息...")
+            progress_callback(1, total_steps, f"Step 1/7: 抓取 {len(competitors)} 个竞品产品信息...")
         product_data = await self._fetch_product_data(competitors)
 
         # Step 2: 抓取评论数据
         logger.info("Step 2: 抓取评论数据...")
         if progress_callback:
-            progress_callback(2, total_steps, "Step 2/6: 抓取评论数据...")
+            progress_callback(2, total_steps, "Step 2/7: 抓取评论数据...")
         review_data = await self._fetch_review_data(competitors)
 
         # Step 3: 抓取 Reddit 讨论内容
         logger.info("Step 3: 抓取 Reddit 讨论内容...")
         if progress_callback:
-            progress_callback(3, total_steps, "Step 3/6: 抓取 Reddit 讨论内容...")
+            progress_callback(3, total_steps, "Step 3/7: 抓取 Reddit 讨论内容...")
         reddit_data = await self._fetch_reddit_content(keyword)
 
-        # Step 4: 使用 LLM 生成竞品对比表
-        logger.info("Step 4: 生成竞品对比表...")
+        # Step 4: 抓取 SEO 数据（Google 搜索排名）
+        logger.info("Step 4: 抓取 SEO 数据...")
         if progress_callback:
-            progress_callback(4, total_steps, "Step 4/6: 使用 AI 生成竞品对比表...")
+            progress_callback(4, total_steps, "Step 4/7: 分析 Google 搜索排名...")
+        seo_data = await self._fetch_seo_data(keyword, competitors, market)
+
+        # Step 5: 使用 LLM 生成竞品对比表
+        logger.info("Step 5: 生成竞品对比表...")
+        if progress_callback:
+            progress_callback(5, total_steps, "Step 5/7: 使用 AI 生成竞品对比表...")
         comparison_table = await self._generate_comparison_table(product_data)
 
-        # Step 5: 使用 LLM 分析评论洞察
-        logger.info("Step 5: 分析评论洞察...")
+        # Step 6: 使用 LLM 分析评论洞察
+        logger.info("Step 6: 分析评论洞察...")
         if progress_callback:
-            progress_callback(5, total_steps, "Step 5/6: 使用 AI 分析评论洞察...")
+            progress_callback(6, total_steps, "Step 6/7: 使用 AI 分析评论洞察...")
         review_insights = await self._analyze_reviews(review_data, reddit_data)
 
-        # Step 6: 使用 LLM 生成行动计划
-        logger.info("Step 6: 生成行动计划...")
+        # Step 7: 使用 LLM 生成行动计划
+        logger.info("Step 7: 生成行动计划...")
         if progress_callback:
-            progress_callback(6, total_steps, "Step 6/6: 使用 AI 生成行动计划...")
+            progress_callback(7, total_steps, "Step 7/7: 使用 AI 生成行动计划...")
         action_plan = await self._generate_action_plan(
             comparison_table,
             review_insights,
+            seo_data,
             keyword,
             market
         )
@@ -176,11 +185,13 @@ class ResearchOrchestrator:
                     "products": len(product_data),
                     "reviews": len(review_data),
                     "reddit_posts": len(reddit_data),
+                    "seo_rankings": len(seo_data.get("rankings", {})),
                 },
             },
             "comparison_table": comparison_table,
             "review_insights": review_insights,
             "reddit_discussions": reddit_data,
+            "seo_analysis": seo_data,
             "action_plan": action_plan,
             "efficiency_comparison": {
                 "manual_hours": 8,  # 估计人工需要 8 小时
@@ -251,11 +262,71 @@ class ResearchOrchestrator:
         self,
         competitors: List[Dict[str, str]]
     ) -> List[Dict[str, Any]]:
-        """抓取评论数据"""
-        # TODO: 实现评论抓取
-        # 暂时返回空列表，因为 Amazon 需要登录
-        logger.warning("评论抓取暂时跳过（Amazon 需要登录）")
-        return []
+        """抓取评论数据（Trustpilot）"""
+        results = []
+
+        # Trustpilot 域名映射（品牌名称小写）
+        trustpilot_domains = {
+            "flexispot": "flexispot.com",
+            "uplift": "upliftdesk.com",
+            "vari": "vari.com",
+            "autonomous": "autonomous.ai",
+            "jarvis": "fully.com",  # Jarvis 是 Fully 的产品
+            "fezibo": "fezibo.com",
+            "apexdesk": "apexdesk.com",
+            "humanscale": "humanscale.com",
+            "ikea": "ikea.com",
+        }
+
+        for competitor in competitors:
+            brand = competitor["brand"]
+            # 支持大小写不敏感的品牌名称匹配
+            domain = trustpilot_domains.get(brand.lower())
+
+            if not domain:
+                logger.warning(f"⚠️  {brand}: 未配置 Trustpilot 域名，跳过")
+                continue
+
+            try:
+                logger.info(f"抓取 {brand} Trustpilot 评论...")
+
+                # 调用 Review MCP
+                result = await self.review_server.call_tool(
+                    "get_reviews",
+                    {"platform": "trustpilot", "product_id": domain, "limit": 50}
+                )
+
+                # 解析结果
+                if result and len(result) > 0:
+                    data = json.loads(result[0].text)
+
+                    # 添加来源信息
+                    data['_source'] = {
+                        'type': 'trustpilot_reviews',
+                        'url': f"https://www.trustpilot.com/review/{domain}",
+                        'brand': brand,
+                        'extracted_at': datetime.now().isoformat(),
+                        'data_points': ['reviews', 'overall_rating', 'total_reviews']
+                    }
+
+                    results.append(data)
+                    logger.info(f"✅ {brand}: {len(data.get('reviews', []))} 条评论")
+                else:
+                    logger.warning(f"⚠️  {brand}: 未获取到评论")
+
+            except Exception as e:
+                logger.error(f"❌ {brand}: {e}")
+                results.append({
+                    "brand": brand,
+                    "error": str(e),
+                    '_source': {
+                        'type': 'error',
+                        'brand': brand,
+                        'extracted_at': datetime.now().isoformat()
+                    }
+                })
+
+        return results
 
     async def _fetch_reddit_content(
         self,
@@ -308,6 +379,67 @@ class ResearchOrchestrator:
 
         return results
 
+    async def _fetch_seo_data(
+        self,
+        keyword: str,
+        competitors: List[Dict[str, str]],
+        market: str
+    ) -> Dict[str, Any]:
+        """抓取 SEO 数据（Google 搜索排名）"""
+        try:
+            # 提取竞品品牌名称
+            competitor_brands = [c["brand"] for c in competitors]
+
+            logger.info(f"分析 Google 搜索排名: {keyword}")
+
+            # 调用 SEO MCP - 分析竞品排名
+            result = await self.seo_server.call_tool(
+                "analyze_competitor_rankings",
+                {
+                    "keyword": keyword,
+                    "competitors": competitor_brands,
+                    "market": market.lower()
+                }
+            )
+
+            # 解析结果
+            if result and len(result) > 0:
+                data = json.loads(result[0].text)
+                logger.info(f"✅ SEO: 找到 {len(data.get('rankings', {}))} 个竞品排名")
+                return data
+            else:
+                logger.warning("⚠️  SEO: 未获取到排名数据")
+                return {
+                    "keyword": keyword,
+                    "market": market,
+                    "rankings": {},
+                    "insights": "未配置 Google Search API 或配额已用完"
+                }
+
+        except Exception as e:
+            logger.error(f"❌ SEO 数据抓取失败: {e}")
+            return {
+                "keyword": keyword,
+                "market": market,
+                "rankings": {},
+                "insights": f"抓取失败: {str(e)}"
+            }
+
+    def _clean_json_response(self, content: str) -> str:
+        """清理 LLM 返回的 JSON 响应（移除 markdown 格式）"""
+        cleaned = content.strip()
+
+        # 移除 markdown 代码块标记
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]  # 移除 ```json
+        elif cleaned.startswith("```"):
+            cleaned = cleaned[3:]  # 移除 ```
+
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]  # 移除结尾的 ```
+
+        return cleaned.strip()
+
     async def _generate_comparison_table(
         self,
         product_data: List[Dict[str, Any]]
@@ -345,21 +477,15 @@ class ResearchOrchestrator:
                     "products": product_data
                 }
 
-            # 尝试提取 JSON（可能包含在 markdown 代码块中）
+            # 清理并解析 JSON
             try:
-                if "```json" in content:
-                    json_str = content.split("```json")[1].split("```")[0].strip()
-                elif "```" in content:
-                    json_str = content.split("```")[1].split("```")[0].strip()
-                else:
-                    json_str = content.strip()
-
-                comparison = json.loads(json_str)
+                cleaned_content = self._clean_json_response(content)
+                comparison = json.loads(cleaned_content)
                 logger.info("✅ 竞品对比表生成成功")
                 return comparison
             except json.JSONDecodeError as je:
                 logger.error(f"❌ JSON 解析失败: {je}")
-                logger.debug(f"原始响应: {content[:500]}...")
+                logger.error(f"原始响应: {content[:500]}...")
                 return {
                     "error": f"JSON 解析失败: {str(je)}",
                     "raw_response": content[:500],
@@ -384,32 +510,108 @@ class ResearchOrchestrator:
                 "note": "暂无评论和讨论数据",
                 "topics": [],
                 "sentiment": {},
-                "insights": []
+                "positive_insights": [],
+                "negative_insights": []
             }
 
-        # 如果有 Reddit 数据，提取关键洞察
-        reddit_insights = []
-        if reddit_data:
-            for post in reddit_data[:5]:  # 只分析前 5 个帖子
-                reddit_insights.append({
-                    "title": post.get("title", ""),
-                    "content": post.get("content", "")[:500],  # 限制长度
-                    "score": post.get("score", 0),
-                    "num_comments": post.get("num_comments", 0),
-                })
+        # 构建 Prompt
+        prompt = self._build_review_analysis_prompt(review_data, reddit_data)
 
-        return {
-            "note": "评论分析基于 Reddit 讨论",
-            "reddit_insights": reddit_insights,
-            "total_posts": len(reddit_data) if reddit_data else 0,
-            "topics": [],  # TODO: 使用 LLM 提取主题
-            "sentiment": {},  # TODO: 使用 LLM 分析情感
-        }
+        try:
+            # 调用 LLM API
+            response = await self.openai_client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "你是一个专业的产品评论分析师，擅长从用户评论中提取主题、情感和关键洞察。输出必须是有效的 JSON 格式。"
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.3,
+                response_format={"type": "json_object"} if self.provider == "openai" else None
+            )
+
+            # 解析响应
+            content = response.choices[0].message.content
+
+            if not content:
+                logger.error("❌ LLM 返回空响应")
+                return {
+                    "error": "LLM 返回空响应",
+                    "topics": [],
+                    "sentiment": {},
+                    "positive_insights": [],
+                    "negative_insights": []
+                }
+
+            # 清理并解析 JSON
+            try:
+                cleaned_content = self._clean_json_response(content)
+                analysis = json.loads(cleaned_content)
+
+                # 添加溯源信息
+                sources = []
+                for brand_reviews in review_data:
+                    if '_source' in brand_reviews:
+                        sources.append({
+                            'type': brand_reviews['_source']['type'],
+                            'brand': brand_reviews['_source']['brand'],
+                            'url': brand_reviews['_source']['url'],
+                            'review_count': len(brand_reviews.get('reviews', [])),
+                            'overall_rating': brand_reviews.get('overall_rating', 0)
+                        })
+
+                # 如果有 Reddit 数据，也添加溯源
+                if reddit_data:
+                    for post in reddit_data:
+                        if '_source' in post:
+                            sources.append({
+                                'type': 'reddit_discussion',
+                                'url': post['_source'].get('url', ''),
+                                'title': post.get('title', ''),
+                                'score': post.get('score', 0)
+                            })
+
+                # 将溯源信息添加到分析结果中
+                analysis['_sources'] = sources
+                analysis['_metadata'] = {
+                    'total_reviews_analyzed': sum(len(br.get('reviews', [])) for br in review_data),
+                    'total_reddit_posts': len(reddit_data) if reddit_data else 0,
+                    'brands_analyzed': [s['brand'] for s in sources if s['type'] == 'trustpilot_reviews']
+                }
+
+                logger.info(f"✅ 评论分析完成，提取 {len(analysis.get('topics', []))} 个主题")
+                return analysis
+            except json.JSONDecodeError as e:
+                logger.error(f"❌ 解析 LLM 响应失败: {e}")
+                logger.error(f"原始响应: {content[:500]}...")
+                return {
+                    "error": f"解析失败: {str(e)}",
+                    "topics": [],
+                    "sentiment": {},
+                    "positive_insights": [],
+                    "negative_insights": []
+                }
+
+        except Exception as e:
+            logger.error(f"❌ LLM 调用失败: {e}")
+            return {
+                "error": str(e),
+                "topics": [],
+                "sentiment": {},
+                "positive_insights": [],
+                "negative_insights": []
+            }
 
     async def _generate_action_plan(
         self,
         comparison_table: Dict[str, Any],
         review_insights: Dict[str, Any],
+        seo_data: Dict[str, Any],
         keyword: str,
         market: str
     ) -> Dict[str, Any]:
@@ -418,6 +620,7 @@ class ResearchOrchestrator:
         prompt = self._build_action_plan_prompt(
             comparison_table,
             review_insights,
+            seo_data,
             keyword,
             market
         )
@@ -447,21 +650,15 @@ class ResearchOrchestrator:
                 logger.error("❌ LLM 返回空响应")
                 return {"error": "LLM 返回空响应"}
 
-            # 尝试提取 JSON（可能包含在 markdown 代码块中）
+            # 清理并解析 JSON
             try:
-                if "```json" in content:
-                    json_str = content.split("```json")[1].split("```")[0].strip()
-                elif "```" in content:
-                    json_str = content.split("```")[1].split("```")[0].strip()
-                else:
-                    json_str = content.strip()
-
-                action_plan = json.loads(json_str)
+                cleaned_content = self._clean_json_response(content)
+                action_plan = json.loads(cleaned_content)
                 logger.info("✅ 行动计划生成成功")
                 return action_plan
             except json.JSONDecodeError as je:
                 logger.error(f"❌ JSON 解析失败: {je}")
-                logger.debug(f"原始响应: {content[:500]}...")
+                logger.error(f"原始响应: {content[:500]}...")
                 return {
                     "error": f"JSON 解析失败: {str(je)}",
                     "raw_response": content[:500]
@@ -495,8 +692,11 @@ class ResearchOrchestrator:
 请生成 JSON 格式的对比表，包含以下维度：
 1. 价格带（price_comparison）：各品牌的价格区间和定位
 2. 核心卖点（feature_comparison）：每个品牌的主要卖点
-3. 产品描述（description_analysis）：产品描述的重点
-4. 图片质量（image_quality）：产品图片的专业程度评估
+3. 痛点分析（pain_points）：从产品描述和功能中推断的潜在痛点
+4. 交付/售后（delivery_service）：发货时间、保修政策、退货政策等
+5. 材质/稳定性（material_stability）：产品材质、承重能力、稳定性评估
+6. 产品描述（description_analysis）：产品描述的重点
+7. 图片质量（image_quality）：产品图片的专业程度评估
 
 输出格式示例：
 {{
@@ -515,6 +715,36 @@ class ResearchOrchestrator:
   "feature_comparison": {{
     "Uplift": ["多种桌面厚度选项", "模块化设计", "7年保修"],
     "Vari": ["终身保修", "快速发货", "简约设计"]
+  }},
+  "pain_points": {{
+    "Uplift": ["组装复杂度较高", "配件选择可能让新手困惑"],
+    "Vari": ["价格偏高", "定制选项较少"]
+  }},
+  "delivery_service": {{
+    "Uplift": {{
+      "shipping": "5-10个工作日",
+      "warranty": "7年保修",
+      "return_policy": "30天退货",
+      "assembly": "需自行组装"
+    }},
+    "Vari": {{
+      "shipping": "3-5个工作日快速发货",
+      "warranty": "终身保修",
+      "return_policy": "30天退货",
+      "assembly": "简易组装"
+    }}
+  }},
+  "material_stability": {{
+    "Uplift": {{
+      "materials": "商用级钢材框架，竹制/层压板桌面",
+      "weight_capacity": "355磅",
+      "stability": "高稳定性，防摇晃设计"
+    }},
+    "Vari": {{
+      "materials": "钢制框架，实木桌面",
+      "weight_capacity": "200磅",
+      "stability": "稳定性良好"
+    }}
   }},
   "description_analysis": {{
     "Uplift": "强调定制化和灵活性",
@@ -547,25 +777,125 @@ class ResearchOrchestrator:
 }}
 """
 
+    def _build_review_analysis_prompt(
+        self,
+        review_data: List[Dict[str, Any]],
+        reddit_data: List[Dict[str, Any]] = None
+    ) -> str:
+        """构建评论分析 prompt"""
+        # 准备评论数据
+        reviews_text = []
+
+        # 处理 Trustpilot 评论
+        for brand_reviews in review_data:
+            brand = brand_reviews.get("company_name", "Unknown")
+            reviews = brand_reviews.get("reviews", [])
+
+            for review in reviews[:20]:  # 每个品牌最多 20 条评论
+                rating = review.get("rating", 0)
+                title = review.get("title", "")
+                text = review.get("text", "")
+
+                if title or text:
+                    reviews_text.append(f"[{brand}] ⭐{rating}/5 - {title} {text}"[:300])
+
+        # 处理 Reddit 讨论（如果有）
+        reddit_text = []
+        if reddit_data:
+            for post in reddit_data[:10]:  # 最多 10 个帖子
+                title = post.get("title", "")
+                content = post.get("content", "")[:200]
+
+                if title:
+                    reddit_text.append(f"[Reddit] {title} - {content}")
+
+        # 构建 Prompt
+        all_reviews = "\n".join(reviews_text[:50])  # 最多 50 条评论
+        all_reddit = "\n".join(reddit_text) if reddit_text else ""
+
+        total_count = len(reviews_text) + len(reddit_text)
+
+        return f"""
+请分析以下 standing desk 产品的用户评论和讨论（共 {total_count} 条）。
+
+用户评论：
+{all_reviews}
+
+{f"Reddit 讨论：\n{all_reddit}\n" if all_reddit else ""}
+
+任务：
+1. 提取 10-20 个主题标签（如：稳定性、价格、客服、组装难度、噪音、高度范围等）
+2. 统计每个主题的出现次数和情感倾向（positive/negative/neutral）
+3. 提取 Top 5 正面要点，附 1-2 个典型语句示例
+4. 提取 Top 5 负面要点，附 1-2 个典型语句示例
+5. 统计整体情感分布
+
+输出 JSON 格式，严格遵循以下结构：
+{{
+  "topics": [
+    {{
+      "name": "主题名称",
+      "count": 出现次数,
+      "percentage": 百分比,
+      "sentiment": "positive/negative/neutral/mixed",
+      "keywords": ["关键词1", "关键词2"]
+    }}
+  ],
+  "positive_insights": [
+    {{
+      "topic": "主题名称",
+      "summary": "要点总结（一句话）",
+      "count": 提及次数,
+      "examples": ["典型语句1", "典型语句2"]
+    }}
+  ],
+  "negative_insights": [
+    {{
+      "topic": "主题名称",
+      "summary": "要点总结（一句话）",
+      "count": 提及次数,
+      "examples": ["典型语句1", "典型语句2"]
+    }}
+  ],
+  "sentiment_distribution": {{
+    "positive": 正面评论数,
+    "neutral": 中性评论数,
+    "negative": 负面评论数,
+    "positive_percentage": 正面百分比,
+    "negative_percentage": 负面百分比
+  }}
+}}
+
+注意：
+- 主题标签要具体、可操作（如"组装难度"而非"质量"）
+- 典型语句要简短、有代表性
+- 百分比保留1位小数
+"""
+
     def _build_action_plan_prompt(
         self,
         comparison_table: Dict[str, Any],
         review_insights: Dict[str, Any],
+        seo_data: Dict[str, Any],
         keyword: str,
         market: str
     ) -> str:
         """构建行动计划 prompt"""
         comparison_json = json.dumps(comparison_table, indent=2, ensure_ascii=False)
         insights_json = json.dumps(review_insights, indent=2, ensure_ascii=False)
+        seo_json = json.dumps(seo_data, indent=2, ensure_ascii=False)
 
         return f"""
-基于以下竞品对比和评论洞察，为 FlexiSpot 在 {market} 市场推出 "{keyword}" 产品制定行动计划。
+基于以下竞品对比、评论洞察和 SEO 数据，为 FlexiSpot 在 {market} 市场推出 "{keyword}" 产品制定行动计划。
 
 竞品对比：
 {comparison_json}
 
 评论洞察：
 {insights_json}
+
+SEO 数据（Google 搜索排名）：
+{seo_json}
 
 请生成 JSON 格式的行动计划，包含：
 1. 运营建议（operations）：上新策略、定价建议、PDP 结构

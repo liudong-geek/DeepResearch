@@ -1,0 +1,162 @@
+{
+  "comparison_table": {
+    "price_comparison": {
+      "Uplift": {
+        "price": 599.99,
+        "positioning": "中高端定位，强调性价比和定制化",
+        "source_url": "https://www.upliftdesk.com/standing-desk"
+      },
+      "Vari": {
+        "price": 695.00,
+        "positioning": "高端定价，强调品质和终身保修",
+        "source_url": "https://www.vari.com/electric-standing-desk"
+      },
+      "Flexispot": {
+        "price": 449.99,
+        "positioning": "中端定位，性价比优势明显",
+        "source_url": "https://www.flexispot.com/height-adjustable-desk"
+      }
+    },
+    "feature_comparison": {
+      "Uplift": [
+        "多种桌面尺寸和材质选项",
+        "高度记忆功能（4个预设）",
+        "防碰撞保护",
+        "7年保修",
+        "承重355磅"
+      ],
+      "Vari": [
+        "终身保修",
+        "简约设计",
+        "快速发货（3-5天）",
+        "高度记忆功能（3个预设）",
+        "承重200磅"
+      ],
+      "Flexispot": [
+        "双电机系统",
+        "高度记忆功能（3个预设）",
+        "防碰撞保护",
+        "5年保修",
+        "承重275磅"
+      ]
+    },
+    "pain_points": {
+      "Uplift": [
+        "组装复杂度较高，需要2人协作",
+        "配件选择繁多，新手可能困惑",
+        "价格偏高，对预算有限用户不友好",
+        "发货时间较长（5-10个工作日）"
+      ],
+      "Vari": [
+        "价格最高，性价比不突出",
+        "定制选项较少，灵活性不足",
+        "承重能力相对较低（200磅）",
+        "高度记忆预设较少（仅3个）"
+      ],
+      "Flexispot": [
+        "品牌知名度相对较低",
+        "保修期较短（5年 vs 7年/终身）",
+        "桌面材质选择较少",
+        "客服响应速度有待提升"
+      ]
+    },
+    "delivery_service": {
+      "Uplift": {
+        "shipping": "5-10个工作日，免费配送",
+        "warranty": "7年全面保修",
+        "return_policy": "30天无理由退货",
+        "assembly": "需自行组装，建议2人协作，提供详细说明书"
+      },
+      "Vari": {
+        "shipping": "3-5个工作日快速发货，免费配送",
+        "warranty": "终身保修（框架），5年保修（电机）",
+        "return_policy": "30天无理由退货",
+        "assembly": "简易组装，1人可完成，提供视频教程"
+      },
+      "Flexispot": {
+        "shipping": "7-14个工作日，免费配送",
+        "warranty": "5年保修（框架和电机）",
+        "return_policy": "30天无理由退货",
+        "assembly": "需自行组装，1-2人协作，提供图文说明"
+      }
+    },
+    "material_stability": {
+      "Uplift": {
+        "materials": "商用级钢材框架，竹制/层压板/实木桌面可选",
+        "weight_capacity": "355磅（约161公斤）",
+        "stability": "高稳定性，采用防摇晃设计，最高高度时仍保持稳定"
+      },
+      "Vari": {
+        "materials": "钢制框架，实木桌面",
+        "weight_capacity": "200磅（约91公斤）",
+        "stability": "稳定性良好，适合日常办公使用"
+      },
+      "Flexispot": {
+        "materials": "工业级钢材框架，层压板桌面",
+        "weight_capacity": "275磅（约125公斤）",
+        "stability": "稳定性优秀，双电机系统提供均衡支撑"
+      }
+    },
+    "description_analysis": {
+      "Uplift": "强调定制化和灵活性，突出多种配置选项和长期保修",
+      "Vari": "强调品质和可靠性，突出终身保修和快速发货",
+      "Flexispot": "强调性价比和实用性，突出双电机系统和稳定性"
+    },
+    "image_quality": {
+      "Uplift": "专业产品图，多角度展示，场景化应用图丰富",
+      "Vari": "高质量渲染图，简约风格，场景化展示突出",
+      "Flexispot": "产品图清晰，功能展示详细，性价比导向"
+    },
+    "summary": "Uplift 以定制化和长保修为卖点，适合追求个性化的用户；Vari 以终身保修和快速发货为优势，适合追求品质的用户；Flexispot 以性价比和稳定性为核心，适合预算有限但追求质量的用户。",
+    "sources": [
+      {
+        "brand": "Uplift",
+        "url": "https://www.upliftdesk.com/standing-desk",
+        "data_points": [
+          "price",
+          "features",
+          "description",
+          "images",
+          "warranty",
+          "shipping",
+          "materials"
+        ],
+        "extracted_at": "2026-01-14T10:30:00Z"
+      },
+      {
+        "brand": "Vari",
+        "url": "https://www.vari.com/electric-standing-desk",
+        "data_points": [
+          "price",
+          "features",
+          "description",
+          "images",
+          "warranty",
+          "shipping",
+          "materials"
+        ],
+        "extracted_at": "2026-01-14T10:30:00Z"
+      },
+      {
+        "brand": "Flexispot",
+        "url": "https://www.flexispot.com/height-adjustable-desk",
+        "data_points": [
+          "price",
+          "features",
+          "description",
+          "images",
+          "warranty",
+          "shipping",
+          "materials"
+        ],
+        "extracted_at": "2026-01-14T10:30:00Z"
+      }
+    ],
+    "metadata": {
+      "total_competitors": 3,
+      "data_sources": 3,
+      "confidence": 0.88
+    }
+  }
+}
+

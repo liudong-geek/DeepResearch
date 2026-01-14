@@ -49,24 +49,30 @@ class GenericScraper(BaseScraper):
             
             # 1. 提取标题
             title = self._extract_title(soup)
-            
-            # 2. 提取价格
-            price = self._extract_price_from_html(html)
-            
+
+            # 2. 提取价格（返回价格和元数据）
+            price, price_metadata = self._extract_price_from_html(html)
+
             # 3. 提取描述
             description = self._extract_description(soup)
-            
+
             # 4. 提取图片
             image_url = self._extract_image(soup, url)
-            
+
             # 价格验证和警告
-            price_warning = None
-            if price < 100:
-                price_warning = "价格异常偏低，可能是配件或数据抓取错误"
-                logger.warning(f"[{self.brand_name}] {price_warning}: ${price}")
+            price_warning = price_metadata.get("warning", None)
+            if price == 0.0:
+                additional_warning = "未找到价格信息，可能需要登录或联系销售"
+                price_warning = f"{price_warning}; {additional_warning}" if price_warning else additional_warning
+                logger.warning(f"[{self.brand_name}] {additional_warning}")
+            elif price < 100:
+                additional_warning = "价格异常偏低，可能是配件或数据抓取错误"
+                price_warning = f"{price_warning}; {additional_warning}" if price_warning else additional_warning
+                logger.warning(f"[{self.brand_name}] {additional_warning}: ${price}")
             elif price > 3000:
-                price_warning = "价格异常偏高，可能包含配件或套装"
-                logger.warning(f"[{self.brand_name}] {price_warning}: ${price}")
+                additional_warning = "价格异常偏高，可能包含配件或套装"
+                price_warning = f"{price_warning}; {additional_warning}" if price_warning else additional_warning
+                logger.warning(f"[{self.brand_name}] {additional_warning}: ${price}")
 
             result = {
                 "brand": self.brand_name,
@@ -80,6 +86,8 @@ class GenericScraper(BaseScraper):
                 "review_count": 0,
                 "in_stock": True,
                 "price_warning": price_warning,  # 添加价格警告
+                "price_confidence": price_metadata.get("confidence", "unknown"),  # 添加置信度
+                "price_extraction_method": price_metadata.get("method", "unknown"),  # 添加提取方法
             }
 
             logger.info(f"[{self.brand_name}] 产品信息提取成功: {title} - ${price}")
@@ -120,7 +128,7 @@ class GenericScraper(BaseScraper):
 
         return "Unknown Product"
     
-    def _extract_price_from_html(self, html: str) -> float:
+    def _extract_price_from_html(self, html: str) -> tuple[float, dict]:
         """
         从 HTML 中提取价格
 
@@ -129,13 +137,20 @@ class GenericScraper(BaseScraper):
         2. 过滤合理范围（$50-$5000）
         3. 优先选择主产品价格（$200-$2000）
         4. 如果没有主产品价格，选择次优价格
+
+        Returns:
+            tuple: (price, metadata) 其中 metadata 包含置信度和提取方法
         """
         # 匹配 $xxx.xx 或 $xxx,xxx.xx 格式
         price_matches = re.findall(r'\$(\d+(?:,\d{3})*(?:\.\d{2})?)', html)
 
         if not price_matches:
             logger.warning(f"[{self.brand_name}] 未找到价格信息")
-            return 0.0
+            return 0.0, {
+                "confidence": "none",
+                "method": "no_price_found",
+                "warning": "未找到价格信息，需人工验证"
+            }
 
         # 转换为浮点数并去重
         prices = list(set([float(p.replace(',', '')) for p in price_matches]))
@@ -148,7 +163,13 @@ class GenericScraper(BaseScraper):
 
         if not reasonable_prices:
             logger.warning(f"[{self.brand_name}] 没有合理范围内的价格，使用原始价格")
-            return min(prices) if prices else 0.0
+            price = min(prices) if prices else 0.0
+            return price, {
+                "confidence": "low",
+                "method": "fallback_min_price",
+                "warning": "价格可能不准确，建议人工验证",
+                "all_prices_found": len(prices)
+            }
 
         # 优先选择主产品价格范围（$200-$2000）
         main_product_prices = [p for p in reasonable_prices if 200 <= p <= 2000]
@@ -157,7 +178,13 @@ class GenericScraper(BaseScraper):
             # 返回主产品价格中的最小值（通常是起始价）
             selected_price = min(main_product_prices)
             logger.info(f"[{self.brand_name}] 选择主产品价格: ${selected_price}")
-            return selected_price
+            return selected_price, {
+                "confidence": "medium",
+                "method": "heuristic_main_product",
+                "warning": "使用启发式算法提取，建议验证",
+                "all_prices_found": len(prices),
+                "candidates": len(main_product_prices)
+            }
 
         # 如果没有主产品价格，选择次优价格（$100-$200 或 $2000-$5000）
         secondary_prices = [p for p in reasonable_prices if 100 <= p < 200 or 2000 < p <= 5000]
@@ -166,12 +193,23 @@ class GenericScraper(BaseScraper):
             # 优先选择较高的价格（更可能是主产品）
             selected_price = max(secondary_prices) if max(secondary_prices) > 200 else min(secondary_prices)
             logger.warning(f"[{self.brand_name}] 未找到主产品价格，选择次优价格: ${selected_price}")
-            return selected_price
+            return selected_price, {
+                "confidence": "low",
+                "method": "heuristic_secondary",
+                "warning": "未找到主产品价格，使用次优价格，需人工验证",
+                "all_prices_found": len(prices),
+                "candidates": len(secondary_prices)
+            }
 
         # 最后的降级方案：选择最小的合理价格
         selected_price = min(reasonable_prices)
         logger.warning(f"[{self.brand_name}] 使用降级方案，选择最小价格: ${selected_price}")
-        return selected_price
+        return selected_price, {
+            "confidence": "low",
+            "method": "fallback_min_reasonable",
+            "warning": "使用降级方案，价格可能不准确，强烈建议人工验证",
+            "all_prices_found": len(prices)
+        }
     
     def _extract_description(self, soup) -> str:
         """提取产品描述"""

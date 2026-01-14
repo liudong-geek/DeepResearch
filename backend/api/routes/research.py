@@ -86,7 +86,7 @@ COMPETITOR_URLS = {
     "uplift": "https://www.upliftdesk.com/uplift-v2-standing-desk-v2-or-v2-commercial/",
     "vari": "https://www.vari.com/electric-standing-desk-60x30/FD-ESD6030.html",
     "jarvis": "https://www.fully.com/standing-desks/jarvis.html",
-    "humanscale": "https://www.humanscale.com/products/sit-stand-desks/float-height-adjustable-desk",
+    "humanscale": "https://www.humanscale.com/products/standing-desks/quickstand-eco-desk-converter",  # 更新为有价格的产品
 
     # Mid-range 品牌
     "flexispot": "https://www.flexispot.com/height-adjustable-desks/electric-height-adjustable-standing-desk-e7",

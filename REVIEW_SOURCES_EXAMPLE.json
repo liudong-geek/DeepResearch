@@ -1,0 +1,101 @@
+{
+  "review_insights": {
+    "topics": [
+      {
+        "name": "稳定性",
+        "count": 45,
+        "sentiment": "mixed"
+      },
+      {
+        "name": "价格",
+        "count": 38,
+        "sentiment": "negative"
+      },
+      {
+        "name": "客服",
+        "count": 32,
+        "sentiment": "positive"
+      }
+    ],
+    "sentiment_distribution": {
+      "positive": 65,
+      "positive_percentage": 65.0,
+      "neutral": 20,
+      "negative": 15,
+      "negative_percentage": 15.0
+    },
+    "positive_insights": [
+      {
+        "topic": "稳定性",
+        "summary": "桌面非常稳定，即使在最高位置也不会晃动",
+        "count": 28,
+        "examples": [
+          "Even at full height, the desk is rock solid",
+          "No wobbling at all, very impressed with the stability"
+        ]
+      },
+      {
+        "topic": "组装",
+        "summary": "组装简单，说明书清晰",
+        "count": 22,
+        "examples": [
+          "Assembly was straightforward, took about 30 minutes",
+          "Clear instructions, easy to put together"
+        ]
+      }
+    ],
+    "negative_insights": [
+      {
+        "topic": "价格",
+        "summary": "价格偏高，性价比一般",
+        "count": 25,
+        "examples": [
+          "Good quality but overpriced for what you get",
+          "Too expensive compared to competitors"
+        ]
+      },
+      {
+        "topic": "噪音",
+        "summary": "电机噪音较大",
+        "count": 18,
+        "examples": [
+          "Motor is quite loud when adjusting height",
+          "Noisy compared to my previous desk"
+        ]
+      }
+    ],
+    "_sources": [
+      {
+        "type": "trustpilot_reviews",
+        "brand": "Uplift",
+        "url": "https://www.trustpilot.com/review/upliftdesk.com",
+        "review_count": 50,
+        "overall_rating": 4.5
+      },
+      {
+        "type": "trustpilot_reviews",
+        "brand": "Jarvis",
+        "url": "https://www.trustpilot.com/review/fully.com",
+        "review_count": 50,
+        "overall_rating": 4.3
+      },
+      {
+        "type": "trustpilot_reviews",
+        "brand": "Vari",
+        "url": "https://www.trustpilot.com/review/vari.com",
+        "review_count": 50,
+        "overall_rating": 4.2
+      }
+    ],
+    "_metadata": {
+      "total_reviews_analyzed": 150,
+      "total_reddit_posts": 0,
+      "brands_analyzed": [
+        "Uplift",
+        "Jarvis",
+        "Vari"
+      ]
+    }
+  }
+}
+

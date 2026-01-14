@@ -210,12 +210,32 @@ export default function ReportPage() {
 
           <div className="bg-orange-50 rounded-lg p-4 text-center">
             <div className="text-2xl font-bold text-orange-600">
-              {result.reddit_discussions?.length ||
-               (typeof result.metadata?.data_sources === 'object'
-                 ? result.metadata.data_sources.reddit_posts
-                 : 0) || 0}
+              {(() => {
+                // 优先显示 Reddit 讨论数量
+                const redditCount = result.reddit_discussions?.length ||
+                  (typeof result.metadata?.data_sources === 'object'
+                    ? result.metadata.data_sources.reddit_posts
+                    : 0) || 0;
+
+                // 如果没有 Reddit 数据，显示评论数据数量
+                if (redditCount === 0) {
+                  return (typeof result.metadata?.data_sources === 'object'
+                    ? result.metadata.data_sources.reviews
+                    : 0) || 0;
+                }
+
+                return redditCount;
+              })()}
             </div>
-            <div className="text-sm text-gray-600">Reddit 讨论</div>
+            <div className="text-sm text-gray-600">
+              {(() => {
+                const redditCount = result.reddit_discussions?.length ||
+                  (typeof result.metadata?.data_sources === 'object'
+                    ? result.metadata.data_sources.reddit_posts
+                    : 0) || 0;
+                return redditCount > 0 ? 'Reddit 讨论' : '评论数据';
+              })()}
+            </div>
           </div>
 
           <div className="bg-purple-50 rounded-lg p-4 text-center">
@@ -257,6 +277,11 @@ export default function ReportPage() {
 
         {/* 竞品对比表 */}
         <ComparisonTable data={result.comparison_table} />
+
+        {/* 评论洞察 */}
+        {result.review_insights && (
+          <ReviewInsights data={result.review_insights} />
+        )}
 
         {/* 行动计划 */}
         <ActionPlan data={result.action_plan} />
@@ -328,8 +353,15 @@ function ComparisonTable({ data }: { data: any }) {
               // 查找对应的引用来源
               const source = findSourceByBrand(sources, brand)
 
+              // 检查是否有价格警告（从 positioning 中提取）
+              const hasWarning = info.positioning && (
+                info.positioning.includes('价格异常') ||
+                info.positioning.includes('需人工核实') ||
+                info.positioning.includes('需验证')
+              )
+
               return (
-                <div key={brand} className="border border-gray-200 rounded-lg p-4">
+                <div key={brand} className={`border rounded-lg p-4 ${hasWarning ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200'}`}>
                   <div className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
                     {brand}
                     {source && (
@@ -339,10 +371,27 @@ function ComparisonTable({ data }: { data: any }) {
                       />
                     )}
                   </div>
-                  <div className="text-2xl font-bold text-blue-600 mb-2">
-                    {price !== null && !isNaN(price) ? `$${price.toFixed(2)}` : info.price || 'N/A'}
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {price !== null && !isNaN(price) ? `$${price.toFixed(2)}` : info.price || 'N/A'}
+                    </div>
+                    {hasWarning && (
+                      <span className="text-yellow-600 text-sm" title="价格需要人工验证">
+                        ⚠️
+                      </span>
+                    )}
                   </div>
-                  <div className="text-sm text-gray-600">{info.positioning}</div>
+                  <div className="text-sm text-gray-600 mb-2">{info.positioning}</div>
+                  {hasWarning && source && (
+                    <a
+                      href={source.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-600 hover:text-blue-800 underline"
+                    >
+                      点击验证价格 →
+                    </a>
+                  )}
                 </div>
               )
             })}
@@ -375,6 +424,135 @@ function ComparisonTable({ data }: { data: any }) {
                       <li key={idx} className="text-sm text-gray-700">{feature}</li>
                     ))}
                   </ul>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 痛点分析 */}
+      {data.pain_points && (
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">⚠️ 痛点分析</h3>
+          <div className="space-y-4">
+            {Object.entries(data.pain_points).map(([brand, painPoints]: [string, any]) => {
+              const source = findSourceByBrand(sources, brand)
+
+              return (
+                <div key={brand} className="border border-red-200 bg-red-50 rounded-lg p-4">
+                  <div className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    {brand}
+                    {source && (
+                      <CitationBubble
+                        number={sources.indexOf(source) + 1}
+                        source={source}
+                      />
+                    )}
+                  </div>
+                  <ul className="list-disc list-inside space-y-1">
+                    {Array.isArray(painPoints) && painPoints.map((point: string, idx: number) => (
+                      <li key={idx} className="text-sm text-gray-700">{point}</li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 交付/售后 */}
+      {data.delivery_service && (
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">🚚 交付/售后</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Object.entries(data.delivery_service).map(([brand, service]: [string, any]) => {
+              const source = findSourceByBrand(sources, brand)
+
+              return (
+                <div key={brand} className="border border-blue-200 bg-blue-50 rounded-lg p-4">
+                  <div className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    {brand}
+                    {source && (
+                      <CitationBubble
+                        number={sources.indexOf(source) + 1}
+                        source={source}
+                      />
+                    )}
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    {service.shipping && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-gray-600 font-medium min-w-[80px]">发货时间:</span>
+                        <span className="text-gray-700">{service.shipping}</span>
+                      </div>
+                    )}
+                    {service.warranty && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-gray-600 font-medium min-w-[80px]">保修政策:</span>
+                        <span className="text-gray-700">{service.warranty}</span>
+                      </div>
+                    )}
+                    {service.return_policy && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-gray-600 font-medium min-w-[80px]">退货政策:</span>
+                        <span className="text-gray-700">{service.return_policy}</span>
+                      </div>
+                    )}
+                    {service.assembly && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-gray-600 font-medium min-w-[80px]">组装要求:</span>
+                        <span className="text-gray-700">{service.assembly}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 材质/稳定性 */}
+      {data.material_stability && (
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">🔧 材质/稳定性</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Object.entries(data.material_stability).map(([brand, material]: [string, any]) => {
+              const source = findSourceByBrand(sources, brand)
+
+              return (
+                <div key={brand} className="border border-green-200 bg-green-50 rounded-lg p-4">
+                  <div className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    {brand}
+                    {source && (
+                      <CitationBubble
+                        number={sources.indexOf(source) + 1}
+                        source={source}
+                      />
+                    )}
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    {material.materials && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-gray-600 font-medium min-w-[80px]">材质:</span>
+                        <span className="text-gray-700">{material.materials}</span>
+                      </div>
+                    )}
+                    {material.weight_capacity && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-gray-600 font-medium min-w-[80px]">承重能力:</span>
+                        <span className="text-gray-700">{material.weight_capacity}</span>
+                      </div>
+                    )}
+                    {material.stability && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-gray-600 font-medium min-w-[80px]">稳定性:</span>
+                        <span className="text-gray-700">{material.stability}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )
             })}
@@ -525,6 +703,275 @@ function ActionPlan({ data }: { data: any }) {
                 </ul>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 投放建议 */}
+      {data.marketing && (
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">🎯 投放建议</h3>
+          <div className="space-y-3">
+            {data.marketing.target_audience && (
+              <div className="bg-orange-50 border-l-4 border-orange-500 p-4">
+                <div className="font-medium text-gray-900 mb-1">目标受众</div>
+                <div className="text-sm text-gray-700">{data.marketing.target_audience}</div>
+              </div>
+            )}
+            {data.marketing.creative_direction && Array.isArray(data.marketing.creative_direction) && (
+              <div className="bg-pink-50 border-l-4 border-pink-500 p-4">
+                <div className="font-medium text-gray-900 mb-2">素材方向</div>
+                <ul className="list-disc list-inside space-y-1">
+                  {data.marketing.creative_direction.map((item: string, idx: number) => (
+                    <li key={idx} className="text-sm text-gray-700">{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {data.marketing.copy_direction && Array.isArray(data.marketing.copy_direction) && (
+              <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4">
+                <div className="font-medium text-gray-900 mb-2">文案方向</div>
+                <ul className="list-disc list-inside space-y-1">
+                  {data.marketing.copy_direction.map((item: string, idx: number) => (
+                    <li key={idx} className="text-sm text-gray-700">{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 产品改进 */}
+      {data.product && data.product.improvements && Array.isArray(data.product.improvements) && (
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">🔧 产品改进建议</h3>
+          <div className="bg-red-50 border-l-4 border-red-500 p-4">
+            <div className="font-medium text-gray-900 mb-2">Top 5 改进点</div>
+            <ol className="list-decimal list-inside space-y-2">
+              {data.product.improvements.map((item: string, idx: number) => (
+                <li key={idx} className="text-sm text-gray-700">{item}</li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      )}
+
+      {/* 客服准备 */}
+      {data.customer_service && data.customer_service.faq && Array.isArray(data.customer_service.faq) && (
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">💬 客服准备</h3>
+          <div className="space-y-3">
+            {data.customer_service.faq.map((item: any, idx: number) => (
+              <div key={idx} className="bg-teal-50 border-l-4 border-teal-500 p-4">
+                <div className="font-medium text-gray-900 mb-1">Q: {item.question}</div>
+                <div className="text-sm text-gray-700">A: {item.answer}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 原始数据（折叠） */}
+      <details className="mt-4">
+        <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-900">
+          查看原始数据
+        </summary>
+        <pre className="mt-2 bg-gray-50 p-4 rounded-lg overflow-auto text-xs">
+          {JSON.stringify(data, null, 2)}
+        </pre>
+      </details>
+    </div>
+  )
+}
+
+// 评论洞察组件
+function ReviewInsights({ data }: { data: any }) {
+  if (!data || Object.keys(data).length === 0) {
+    return (
+      <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">⭐ 评论洞察</h2>
+        <p className="text-gray-500">暂无数据</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-2xl font-bold text-gray-900">⭐ 评论洞察</h2>
+
+        {/* 数据来源 */}
+        {data._sources && Array.isArray(data._sources) && data._sources.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500">数据来源:</span>
+            <div className="flex gap-2">
+              {data._sources
+                .filter((source: any) => source.type === 'trustpilot_reviews')
+                .map((source: any, idx: number) => (
+                  <a
+                    key={idx}
+                    href={source.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs hover:bg-blue-100 transition-colors"
+                    title={`${source.brand} - ${source.review_count} 条评论，平均 ${source.overall_rating} 星`}
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    {source.brand} Trustpilot
+                  </a>
+                ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 元数据统计 */}
+      {data._metadata && (
+        <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+          <div className="flex gap-6 text-sm text-gray-600">
+            <div>
+              <span className="font-medium">分析评论数:</span> {data._metadata.total_reviews_analyzed || 0}
+            </div>
+            {data._metadata.brands_analyzed && data._metadata.brands_analyzed.length > 0 && (
+              <div>
+                <span className="font-medium">品牌:</span> {data._metadata.brands_analyzed.join(', ')}
+              </div>
+            )}
+            {data._metadata.total_reddit_posts > 0 && (
+              <div>
+                <span className="font-medium">Reddit 讨论:</span> {data._metadata.total_reddit_posts}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 情感分布 */}
+      {data.sentiment_distribution && (
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">📊 情感分布</h3>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+              <div className="text-3xl font-bold text-green-600">
+                {data.sentiment_distribution.positive || 0}
+              </div>
+              <div className="text-sm text-gray-600 mt-1">正面评论</div>
+              <div className="text-xs text-gray-500 mt-1">
+                {data.sentiment_distribution.positive_percentage?.toFixed(1) || 0}%
+              </div>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+              <div className="text-3xl font-bold text-gray-600">
+                {data.sentiment_distribution.neutral || 0}
+              </div>
+              <div className="text-sm text-gray-600 mt-1">中性评论</div>
+            </div>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+              <div className="text-3xl font-bold text-red-600">
+                {data.sentiment_distribution.negative || 0}
+              </div>
+              <div className="text-sm text-gray-600 mt-1">负面评论</div>
+              <div className="text-xs text-gray-500 mt-1">
+                {data.sentiment_distribution.negative_percentage?.toFixed(1) || 0}%
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 主题标签 */}
+      {data.topics && Array.isArray(data.topics) && data.topics.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">🏷️ 主题标签</h3>
+          <div className="flex flex-wrap gap-2">
+            {data.topics.map((topic: any, idx: number) => {
+              const sentimentColor =
+                topic.sentiment === 'positive' ? 'bg-green-100 text-green-800 border-green-300' :
+                topic.sentiment === 'negative' ? 'bg-red-100 text-red-800 border-red-300' :
+                topic.sentiment === 'mixed' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+                'bg-gray-100 text-gray-800 border-gray-300'
+
+              return (
+                <div
+                  key={idx}
+                  className={`px-3 py-2 rounded-lg border ${sentimentColor} text-sm`}
+                >
+                  <span className="font-medium">{topic.name}</span>
+                  <span className="ml-2 text-xs opacity-75">
+                    ({topic.count || 0})
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 正面洞察 */}
+      {data.positive_insights && Array.isArray(data.positive_insights) && data.positive_insights.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">👍 正面洞察 (Top 5)</h3>
+          <div className="space-y-3">
+            {data.positive_insights.map((insight: any, idx: number) => (
+              <div key={idx} className="bg-green-50 border-l-4 border-green-500 p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="font-medium text-gray-900">
+                    {insight.topic || `洞察 ${idx + 1}`}
+                  </div>
+                  {insight.count && (
+                    <span className="text-xs bg-green-200 text-green-800 px-2 py-1 rounded">
+                      {insight.count} 次提及
+                    </span>
+                  )}
+                </div>
+                <div className="text-sm text-gray-700 mb-2">{insight.summary}</div>
+                {insight.examples && Array.isArray(insight.examples) && insight.examples.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {insight.examples.map((example: string, exIdx: number) => (
+                      <div key={exIdx} className="text-xs text-gray-600 italic pl-3 border-l-2 border-green-300">
+                        "{example}"
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 负面洞察 */}
+      {data.negative_insights && Array.isArray(data.negative_insights) && data.negative_insights.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">👎 负面洞察 (Top 5)</h3>
+          <div className="space-y-3">
+            {data.negative_insights.map((insight: any, idx: number) => (
+              <div key={idx} className="bg-red-50 border-l-4 border-red-500 p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="font-medium text-gray-900">
+                    {insight.topic || `洞察 ${idx + 1}`}
+                  </div>
+                  {insight.count && (
+                    <span className="text-xs bg-red-200 text-red-800 px-2 py-1 rounded">
+                      {insight.count} 次提及
+                    </span>
+                  )}
+                </div>
+                <div className="text-sm text-gray-700 mb-2">{insight.summary}</div>
+                {insight.examples && Array.isArray(insight.examples) && insight.examples.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {insight.examples.map((example: string, exIdx: number) => (
+                      <div key={exIdx} className="text-xs text-gray-600 italic pl-3 border-l-2 border-red-300">
+                        "{example}"
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}

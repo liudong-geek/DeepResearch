@@ -7,7 +7,8 @@ import json
 from loguru import logger
 
 from ..shared import BaseMCPServer, MCPTool, MCPResource, TextContent
-from .scrapers import AmazonReviewScraper, RedditReviewScraper
+from .scrapers import TrustpilotReviewScraper
+# from .scrapers import AmazonReviewScraper, RedditReviewScraper  # 已移除：Amazon 需要登录，Reddit API 不稳定
 
 
 class ReviewMCPServer(BaseMCPServer):
@@ -27,8 +28,9 @@ class ReviewMCPServer(BaseMCPServer):
 
         # 初始化爬虫
         self.scrapers = {
-            "amazon": AmazonReviewScraper(self.rate_limiter, self.cache),
-            "reddit": RedditReviewScraper(self.rate_limiter, self.cache),
+            "trustpilot": TrustpilotReviewScraper(self.rate_limiter, self.cache),
+            # "amazon": AmazonReviewScraper(self.rate_limiter, self.cache),  # 已移除：需要登录
+            # "reddit": RedditReviewScraper(self.rate_limiter, self.cache),  # 已移除：API 不稳定
         }
 
         logger.info(f"Review MCP Server 已初始化，支持: {list(self.scrapers.keys())}")
@@ -38,18 +40,18 @@ class ReviewMCPServer(BaseMCPServer):
         return [
             MCPTool(
                 name="get_reviews",
-                description="获取产品评论列表",
+                description="获取产品评论列表（Trustpilot）",
                 input_schema={
                     "type": "object",
                     "properties": {
                         "platform": {
                             "type": "string",
-                            "description": "平台名称（amazon/reddit）",
-                            "enum": ["amazon", "reddit"],
+                            "description": "平台名称（trustpilot）",
+                            "enum": ["trustpilot"],
                         },
                         "product_id": {
                             "type": "string",
-                            "description": "产品 ID 或 ASIN",
+                            "description": "公司域名（如 flexispot.com）",
                         },
                         "limit": {
                             "type": "integer",
@@ -62,18 +64,18 @@ class ReviewMCPServer(BaseMCPServer):
             ),
             MCPTool(
                 name="analyze_reviews",
-                description="分析评论，提取主题标签和情感",
+                description="分析评论，提取主题标签和情感（Trustpilot）",
                 input_schema={
                     "type": "object",
                     "properties": {
                         "platform": {
                             "type": "string",
-                            "description": "平台名称（amazon/reddit）",
-                            "enum": ["amazon", "reddit"],
+                            "description": "平台名称（trustpilot）",
+                            "enum": ["trustpilot"],
                         },
                         "product_id": {
                             "type": "string",
-                            "description": "产品 ID 或 ASIN",
+                            "description": "公司域名（如 flexispot.com）",
                         },
                         "limit": {
                             "type": "integer",

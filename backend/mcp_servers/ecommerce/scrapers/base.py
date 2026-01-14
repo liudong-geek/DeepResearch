@@ -197,15 +197,18 @@ class BaseScraper(ABC):
             await page.set_extra_http_headers(self.headers)
 
             # 访问页面（使用更宽松的等待策略）
+            # 直接使用 domcontentloaded，更快更稳定
+            # networkidle 对于现代电商网站（大量第三方脚本）经常超时
             try:
-                # 先尝试等待网络空闲
-                await page.goto(url, wait_until="networkidle", timeout=60000)
+                await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                # 等待主要内容加载（比 networkidle 快得多）
+                await page.wait_for_timeout(2000)
+                logger.debug(f"页面加载完成: {url}")
             except Exception as e:
-                logger.warning(f"networkidle 超时，降级为 domcontentloaded: {e}")
-                # 如果网络空闲超时，降级为 DOM 加载完成
-                await page.goto(url, wait_until="domcontentloaded", timeout=60000)
-                # 额外等待一下
-                await page.wait_for_timeout(3000)
+                logger.warning(f"页面加载超时: {e}")
+                # 如果连 domcontentloaded 都超时，尝试 load
+                await page.goto(url, wait_until="load", timeout=30000)
+                await page.wait_for_timeout(1000)
 
             # 模拟用户行为（随机滚动）
             scroll_distance = random.randint(300, 800)

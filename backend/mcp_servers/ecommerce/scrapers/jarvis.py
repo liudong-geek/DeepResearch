@@ -32,31 +32,96 @@ class JarvisScraper(BaseScraper):
             title_elem = soup.find("h1")
             title = self._clean_text(title_elem.text) if title_elem else "Unknown"
 
-            # 价格 - 从 HTML 中搜索价格模式
-            price_matches = re.findall(r'\$(\d+(?:,\d{3})*(?:\.\d{2})?)', html)
-            # 转换为浮点数并去重
-            prices = list(set([float(p.replace(',', '')) for p in price_matches if p]))
-            prices.sort()
+            # 价格提取 - 多种策略
+            import json as json_lib
+            price = 0.0
+            price_source = "unknown"
 
-            logger.debug(f"[Jarvis] 找到价格: {prices[:10]}")
+            # 策略 1: 从 JSON-LD 结构化数据中提取
+            try:
+                json_ld_pattern = r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>'
+                json_ld_matches = re.findall(json_ld_pattern, html, re.DOTALL | re.IGNORECASE)
+                for json_str in json_ld_matches:
+                    try:
+                        data = json_lib.loads(json_str)
+                        items = [data] if isinstance(data, dict) else data
+                        for item in items:
+                            if item.get('@type') == 'Product' and 'offers' in item:
+                                offers = item['offers']
+                                if isinstance(offers, dict):
+                                    price_value = offers.get('price') or offers.get('lowPrice')
+                                    if price_value:
+                                        price = float(price_value)
+                                        price_source = "json-ld"
+                                        logger.info(f"[Jarvis] 从 JSON-LD 提取价格: ${price}")
+                                        break
+                        if price > 0:
+                            break
+                    except:
+                        continue
+            except Exception as e:
+                logger.debug(f"[Jarvis] JSON-LD 提取失败: {e}")
 
-            # 过滤合理价格范围（$50-$5000）
-            reasonable_prices = [p for p in prices if 50 <= p <= 5000]
+            # 策略 2: 从 JavaScript 变量中提取
+            if price == 0.0:
+                try:
+                    js_price_patterns = [
+                        r'"price":\s*(\d+(?:\.\d{2})?)',
+                        r'price:\s*(\d+(?:\.\d{2})?)',
+                        r'data-price="(\d+(?:\.\d{2})?)"',
+                        r'"lowPrice":\s*(\d+(?:\.\d{2})?)',
+                    ]
+                    for pattern in js_price_patterns:
+                        matches = re.findall(pattern, html)
+                        if matches:
+                            # 过滤合理价格（$400-$3000 for standing desks）
+                            valid_prices = [float(m) for m in matches if 400 <= float(m) <= 3000]
+                            if valid_prices:
+                                price = min(valid_prices)
+                                price_source = "javascript"
+                                logger.info(f"[Jarvis] 从 JavaScript 提取价格: ${price}")
+                                break
+                except Exception as e:
+                    logger.debug(f"[Jarvis] JavaScript 提取失败: {e}")
 
-            # 优先选择主产品价格范围（$200-$2000）
-            main_product_prices = [p for p in reasonable_prices if 200 <= p <= 2000]
+            # 策略 3: 从 HTML 价格标签中提取
+            if price == 0.0:
+                try:
+                    price_elem = soup.select_one('.price, .product-price, [data-price], .price-value, .starting-at-price')
+                    if price_elem:
+                        price_text = price_elem.get('data-price') or price_elem.text
+                        price_match = re.search(r'\$?(\d+(?:,\d{3})*(?:\.\d{2})?)', price_text)
+                        if price_match:
+                            price = float(price_match.group(1).replace(',', ''))
+                            price_source = "html-element"
+                            logger.info(f"[Jarvis] 从 HTML 元素提取价格: ${price}")
+                except Exception as e:
+                    logger.debug(f"[Jarvis] HTML 元素提取失败: {e}")
 
-            if main_product_prices:
-                price = min(main_product_prices)
-                logger.info(f"[Jarvis] 选择主产品价格: ${price}")
-            elif reasonable_prices:
-                # 选择次优价格
-                secondary_prices = [p for p in reasonable_prices if 100 <= p < 200 or 2000 < p <= 5000]
-                price = max(secondary_prices) if secondary_prices and max(secondary_prices) > 200 else min(reasonable_prices)
-                logger.warning(f"[Jarvis] 选择次优价格: ${price}")
-            else:
-                price = max(prices) if prices else 0.0
-                logger.warning(f"[Jarvis] 使用降级方案: ${price}")
+            # 策略 4: 降级方案 - 智能选择
+            if price == 0.0:
+                try:
+                    price_matches = re.findall(r'\$(\d+(?:,\d{3})*(?:\.\d{2})?)', html)
+                    prices = list(set([float(p.replace(',', '')) for p in price_matches if p]))
+                    prices.sort()
+
+                    # 过滤站立桌合理价格范围（$400-$3000）
+                    reasonable_prices = [p for p in prices if 400 <= p <= 3000]
+
+                    if reasonable_prices:
+                        # 选择中位数价格
+                        price = reasonable_prices[len(reasonable_prices) // 2]
+                        price_source = "fallback-median"
+                        logger.warning(f"[Jarvis] 使用降级方案（中位数）: ${price}")
+                    else:
+                        # 最后的降级：选择最高价格
+                        high_prices = [p for p in prices if p >= 200]
+                        if high_prices:
+                            price = max(high_prices)
+                            price_source = "fallback-max"
+                            logger.warning(f"[Jarvis] 使用降级方案（最高价）: ${price}")
+                except Exception as e:
+                    logger.error(f"[Jarvis] 降级方案失败: {e}")
 
             # 描述 - 查找有实质内容的段落
             desc_paragraphs = soup.find_all("p")
@@ -95,6 +160,7 @@ class JarvisScraper(BaseScraper):
                 "rating": None,
                 "review_count": 0,
                 "in_stock": True,
+                "price_extraction_method": price_source,  # 价格提取方法
             }
 
             logger.info(f"[Jarvis] 产品信息提取成功: {title}")
